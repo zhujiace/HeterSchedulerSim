@@ -7,25 +7,11 @@ Copy Right. The EHPCL Authors.
 
 #include <string>
 
-/**
- * @brief Describes task affinity on which types of processors,. 
-*/
-enum ProcessorAffinity_t {
-    CPU,
-    CPUBigCore,
-    CPULittleCore,
-    DataCopy,
-    DataCopyHTD,
-    DataCopyDTH,
-    PE,
-    GPU,
-    FPGA,
-    UNKNOWN
-};
+#include "affinity.h"
 
 typedef ProcessorAffinity_t ProcessorType_t;
 
-const std::string ProcessorAffinityNames[10] = {
+const std::string ProcessorTypeNames[10] = {
     "CPU",
     "CPUBigCore",
     "CPULittleCore",
@@ -54,7 +40,7 @@ class Processor {
 public:
     ProcessorState_t stateQuery();
     ProcessorType_t typeQuery();
-    
+
 };
 
 #endif // processor.h
