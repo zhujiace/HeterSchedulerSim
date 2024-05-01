@@ -85,4 +85,10 @@ public:
     Segment & getCurrentSegment() {return segments[currentSegmentIndex];};
 };
 
+class DAGTask : public Task {
+
+    // TODO
+
+};
+
 #endif // task.h

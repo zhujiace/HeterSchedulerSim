@@ -7,7 +7,7 @@ Copy Right. The EHPCL Authors.
 
 #include <string>
 
-#include "affinity.h"
+#include "task.h"
 
 typedef ProcessorAffinity_t ProcessorType_t;
 
@@ -32,15 +32,25 @@ enum ProcessorState_t {
     UNKNOWN
 };
 
+typedef TaskPreemption_t ProcessorPreemption_t;
+typedef unsigned int ProcessorIndex_t;
+
 class Processor {
 
-    ProcessorType_t processorType; 
+    ProcessorType_t processorType;
+    ProcessorPreemption_t processorPreemption;
     ProcessorState_t processorState;
+    ProcessorIndex_t processorGlobalIndex;
+    ProcessorIndex_t processorInternalIndex;
+
+    Task * currentTask;
 
 public:
-    ProcessorState_t stateQuery();
-    ProcessorType_t typeQuery();
+    ProcessorState_t queryProcessorState();
+    ProcessorType_t queryProcessorType();
+    ProcessorIndex_t queryProcessorGlobalIndex();
 
+    Task & getCurrentTask();
 };
 
 #endif // processor.h
