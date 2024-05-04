@@ -66,7 +66,7 @@ public:
      * @brief Schedule the given task on this processor, taking account
      * the processor affinity and preemption property.
     */
-    bool scheduleTask(Task & taskToSchedule);
+    bool scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp);
 
     // Default constructor, create an empty processor.
     Processor() {};

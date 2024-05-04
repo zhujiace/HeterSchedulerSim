@@ -21,7 +21,7 @@ enum TaskPreemption_t {
 enum TaskRTProperty_t {
     HARDRT,
     SOFTRT,
-    NONERT,
+    NONERT, // Current simulator does not support none RT Task.
     UNKNOWN
 };
 
@@ -49,6 +49,7 @@ class Segment {
     SegmentPreemption_t segmentPreemption = PREEMPTIVE;
     SegmentLength_t segmentLength = 0;
     SegmentLength_t segmentRemainLength;
+    // The segment index inside its task.
     SegmentIndex_t segmentIndex = 0;
 
     // The segment can be executed if and only if all the dependent segments are finished.
@@ -57,6 +58,11 @@ class Segment {
     std::vector<Segment *> dependentSegment;
 
     std::vector<TimeStamp_t> executedAt = {};
+
+    // Local storage to speed up the system.
+    // Set to true if the corresponding methods return true.
+    bool segmentCompleted = false;
+    bool segmentReady = false;
 public:
     bool isSegmentCompleted() {return segmentRemainLength==0;};
     bool isSegmentReady();
@@ -72,6 +78,13 @@ public:
             SegmentPreemption_t SegmentPreemption):
             segmentLength(segmentLength), segmentIndex(segmentIndex), segmentPreemption(segmentPreemption)
             {};
+    
+    /**
+     * @brief Task may be period, the segment is reinited and executed again.
+     * @return True if reseted successfully, False if the reset behavior is inproper,
+     * e.g. reset before the segment has finished.
+    */
+    bool resetSegment();
 };
 
 /**
@@ -87,19 +100,18 @@ protected:
     TaskPreemption_t taskPreemption = PREEMPTIVE;
     unsigned int segmentCount = 0;
     std::vector<Segment> segments = {};
-    TimeStamp_t taskReleaseTime = 0;
-    TimeStamp_t taskAbsoluteDeadline = 0;
     TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::UNKNOWN;
 
 public:
     unsigned int querySegmentCount() {return segmentCount;};
+    SegmentLength_t querySegmentExecutionTime();
     bool isTaskCompleted();
     bool isSegmentReady(SegmentIndex_t segmentIndex) {return segments[segmentIndex].isSegmentReady();};
     /**
      * @brief Execute the given segment by 1 unit, need to take the preemption into account.
      * @return True if segment is succuessfully executed, otherwise false.
     */
-    bool executeSegment(SegmentIndex_t segmentIndex);
+    bool executeSegment(SegmentIndex_t segmentIndex, TimeStamp_t timeStamp);
     /**
      * @brief Create one new segment and inserted in the back
     */
@@ -107,17 +119,17 @@ public:
 
     // Default constructor: create an empty task
     Task() {};
-    Task(TimeStamp_t taskReleaseTime, TimeStamp_t taskAbsoluteDeadline,
-        TaskRTProperty_t taskRealTimeProperty, unsigned int segmentCount,
-        ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption):
-        taskReleaseTime(taskReleaseTime), taskAbsoluteDeadline(taskAbsoluteDeadline),
-        taskRealTimeProperty(taskRealTimeProperty), segmentCount(segmentCount),
-        processorAffinity(processorAffinity), taskPreemption(taskPreemption)
-        {};
+    Task(TaskRTProperty_t taskRealTimeProperty,
+         ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption):
+         taskRealTimeProperty(taskRealTimeProperty),
+         processorAffinity(processorAffinity), taskPreemption(taskPreemption)
+         {};
 
     void setProcessorMasks(std::vector<processor::ProcessorIndex_t> & processorMasks);
     bool isProcessorMaskEnabled() {return processorMaskEnabled;};
     bool isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalIndex);
+
+    TaskRTProperty_t queryTaskRTProperty() {return taskRealTimeProperty;};
 };
 
 class SSTask : public Task {
@@ -135,6 +147,46 @@ public:
 class DAGTask : public Task {
 
     // TODO
+
+};
+
+
+/**
+ * @brief Represent one task (tau_i) in heterogenous computing platform, 
+ *  using the self-suspension model.
+*/
+class HeterSSTask {
+
+
+    /**
+     * @brief Different subtasks which combines to make the whole task, 
+     * executed in an interleaved pattern.
+     * @example C0-G0-C1-G1-C2-G2-C3, where Ci are CPU Task, Gi are GPU Task,
+     * each Ci or Gi is a Segment itself.
+    */
+    std::vector<Task> internalTasks = {};
+
+    unsigned int processorTypeCount = 0;
+
+    TimeStamp_t taskRelativeDeadline = 0;
+    TimeStamp_t taskExecutionTime = 0;
+
+    TimeStamp_t taskPeriod = 0;
+
+public:
+
+
+    bool _createNewTask(TaskRTProperty_t taskRealTimeProperty, 
+                        ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
+    bool createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
+
+    bool createNewSegmentForTask(ProcessorAffinity_t processorAffinity, SegmentLength_t segmentLength);
+
+
+    void setTaskPeriod(TimeStamp_t taskPeroid) {this->taskPeriod = taskPeriod;};
+
+    double queryTaskUtilization();
+    double querySingleTaskUtilization(ProcessorAffinity_t processorAffinity);
 
 };
 
