@@ -29,6 +29,15 @@ typedef TaskPreemption_t SegmentPreemption_t;
 typedef unsigned int SegmentLength_t;
 typedef unsigned int SegmentIndex_t;
 
+typedef unsigned int HeterTaskIndex_t;
+
+enum SegmentState_t {
+    READY,
+    NOTREADY,
+    FINISHED,
+    UNKNWON
+};
+
 enum SSTaskState_t {
     EXECUTING,
     SUSPENSION,
@@ -36,7 +45,28 @@ enum SSTaskState_t {
     UNKNOWN,
 };
 
+enum HeterSSTaskState_t {
+    EXECUTING,
+    FINISHED,
+    READY,
+    MISSDDL,
+    UNKNOWN,
+};
+
 typedef unsigned long long TimeStamp_t;
+
+typedef unsigned char TaskRTPriority_t;
+
+// The value is same as "SCHED_***" defined in <sched.h>
+enum TaskRTSchedulePolicy_t {
+    HETER_SCHED_OTHER,
+    HETER_SCHED_FIFO,
+    HETER_SCHED_RR,
+    HETER_SCHED_BATCH,
+    HETER_SCHED_ISO,
+    HETER_SCHED_IDLE,
+    HETER_SCHED_DEADLINE,
+};
 
 };
 
@@ -55,7 +85,10 @@ class Segment {
     // The segment can be executed if and only if all the dependent segments are finished.
     unsigned int dependencyCount;
     // The dependent segments may come from other tasks, set to nullptr if none.
-    std::vector<Segment *> dependentSegment;
+    std::vector<Segment *> dependentSegments;
+
+    unsigned int dependentedByCount;
+    std::vector<Segment *> dependentedBySegments;
 
     std::vector<TimeStamp_t> executedAt = {};
 
@@ -65,6 +98,7 @@ class Segment {
     bool segmentReady = false;
 public:
     bool isSegmentCompleted() {return segmentRemainLength==0;};
+    bool markSegmentReady() {segmentReady = true;};
     bool isSegmentReady();
     void addToDependency(Segment & segment);
     bool configureDependency(std::vector<Segment *> segments);
@@ -88,7 +122,7 @@ public:
 };
 
 /**
- * @brief Virtual class on task, inherit to SSTask or DAGTask.
+ * @brief Class on task, can inherit to SSTask or DAGTask.
 */
 class Task {
 
@@ -100,11 +134,16 @@ protected:
     TaskPreemption_t taskPreemption = PREEMPTIVE;
     unsigned int segmentCount = 0;
     std::vector<Segment> segments = {};
-    TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::UNKNOWN;
+    TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
+
+    bool taskCompleted = false;
+
+    std::vector<SegmentState_t> segmentStates; 
 
 public:
     unsigned int querySegmentCount() {return segmentCount;};
     SegmentLength_t querySegmentExecutionTime();
+
     bool isTaskCompleted();
     bool isSegmentReady(SegmentIndex_t segmentIndex) {return segments[segmentIndex].isSegmentReady();};
     /**
@@ -116,6 +155,9 @@ public:
      * @brief Create one new segment and inserted in the back
     */
     bool createNewSegment(SegmentLength_t segmentLength);
+
+    bool _resetAllSegments();
+    bool resetTask() {return _resetAllSegments();};
 
     // Default constructor: create an empty task
     Task() {};
@@ -130,6 +172,9 @@ public:
     bool isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalIndex);
 
     TaskRTProperty_t queryTaskRTProperty() {return taskRealTimeProperty;};
+
+    bool setTaskScheduled();
+    bool setTaskPreempted();
 };
 
 class SSTask : public Task {
@@ -173,6 +218,13 @@ class HeterSSTask {
 
     TimeStamp_t taskPeriod = 0;
 
+    HeterSSTaskState_t heterSSTaskState = HeterSSTaskState_t::FINISHED;
+
+    TaskRTPriority_t heterSSTaskPriority = 99;
+    TaskRTSchedulePolicy_t heterSSTaskSchedulePolicy = HETER_SCHED_FIFO;
+
+    Processor * currentProcessor = nullptr;
+
 public:
 
 
@@ -180,14 +232,30 @@ public:
                         ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
     bool createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
 
+    Task & getTask(ProcessorAffinity_t processorAffinity);
     bool createNewSegmentForTask(ProcessorAffinity_t processorAffinity, SegmentLength_t segmentLength);
 
+    /**
+     * @brief Initialize the internal task vector by a given vector.
+     * @return False if the format is not correct, otherwise true.
+     * @example Input segments: Type = {CPU,GPU}, segments = {3,1,2,4,5} -> C-G-C-G-C.
+     * @attention Current version requires the processorTypes to be different.
+    */
+    bool initializeTaskByVector(std::vector<ProcessorAffinity_t> processorType, std::vector<SegmentLength_t> segments);
 
     void setTaskPeriod(TimeStamp_t taskPeroid) {this->taskPeriod = taskPeriod;};
+    void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
 
     double queryTaskUtilization();
     double querySingleTaskUtilization(ProcessorAffinity_t processorAffinity);
 
+    bool releaseTask(TimeStamp_t currentTime);
+    // Enumerate over all the subtasks
+    HeterSSTaskState_t queryHeterSSTaskState();
+    bool isAllTasksCompleted();
+    bool checkWhetherMissDDL(TimeStamp_t currentTime);
+
+    bool scheduleTask(Processor & processor);
 };
 
 #endif // task.h

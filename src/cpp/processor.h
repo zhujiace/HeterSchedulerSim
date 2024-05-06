@@ -75,6 +75,13 @@ public:
               ProcessorIndex_t processorGlobalIndex):
               processorType(processorType), processorPreemption(ProcessorPreemption),
               processorGlobalIndex(processorGlobalIndex) {};
+
+    bool setProcessorState(ProcessorState_t processorNewState)
+        {processorState = processorNewState;};
+
+    // Simulate the behavior: either execute the task or keep idle
+    // Update the processor state if necessary
+    bool workProcessor();
 };
 
 #endif // processor.h
