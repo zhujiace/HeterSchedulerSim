@@ -186,6 +186,11 @@ public:
 
     bool setTaskScheduled();
     bool setTaskPreempted();
+
+    /**
+     * @brief Configure dependency: seg2 depends on seg1
+    */
+    void setSegmentDependency(SegmentIndex_t seg1, SegmentIndex_t seg2);
 };
 
 class SSTask : public Task {
@@ -257,6 +262,8 @@ public:
     */
     bool initializeTaskByVector(std::vector<ProcessorAffinity_t> processorType, std::vector<SegmentLength_t> segments);
 
+    TimeStamp_t queryTaskPeriod() {return taskPeriod;}
+    TimeStamp_t queryTaskRelativeDeadline() {return taskRelativeDeadline;}
     void setTaskPeriod(TimeStamp_t taskPeroid) {this->taskPeriod = taskPeriod;};
     void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
     void setTaskRTPriority(TaskRTPriority_t priority) {this->heterSSTaskPriority = priority;};
@@ -268,6 +275,7 @@ public:
     // Enumerate over all the subtasks
     HeterSSTaskState_t queryHeterSSTaskState();
     bool isAllTasksCompleted();
+    // true if miss
     bool checkWhetherMissDDL(TimeStamp_t currentTime);
 
     bool scheduleTask(Processor & processor);

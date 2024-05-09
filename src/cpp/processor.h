@@ -57,8 +57,14 @@ public:
     ProcessorState_t queryProcessorState() {return processorState;};
     ProcessorIndex_t queryProcessorGlobalIndex() {return processorGlobalIndex;};
 
-    void setProcessorInternalIndex(ProcessorIndex_t processorInternalIndex);
-    void setProcessorGlobalIndex(ProcessorIndex_t processorGlobalIndex);
+    void setProcessorInternalIndex(ProcessorIndex_t processorInternalIndex)
+        {this->processorInternalIndex = processorInternalIndex;}
+    void setProcessorGlobalIndex(ProcessorIndex_t processorGlobalIndex)
+        {this->processorGlobalIndex = processorGlobalIndex;}
+
+    bool operator<(const Processor & other) const {
+        return processorType < other.processorType;
+    }
 
     Task & getCurrentTask() {return *currentTask;};
 

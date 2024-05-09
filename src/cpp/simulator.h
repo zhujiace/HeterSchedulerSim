@@ -88,6 +88,8 @@ public:
 
     bool isSimulationCompleted() {return currentTimeStamp>=maximumSimulationTime;};
     bool doesTaskMissDeadline() {return taskMissDeadline;};
+
+    ProcessorPreemption_t queryProcessorPreemptionBasedonType(ProcessorType_t processorType);
 };
 
 
