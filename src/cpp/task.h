@@ -6,6 +6,7 @@ Copy Right. The EHPCL Authors.
 #define TASK_H
 
 #include <vector>
+#include <queue>
 
 #include "affinity.h"
 #include "processor.h"
@@ -138,7 +139,14 @@ protected:
 
     bool taskCompleted = false;
 
-    std::vector<SegmentState_t> segmentStates; 
+    std::vector<SegmentState_t> segmentStates;
+    std::queue<Segment *> readySegments = {};
+
+    // TODO: Future feature, to support parallel execution of 
+    // segments inside this task.
+    // Argue: In this case, we should split the task
+    bool ifParallel = false;
+
 
 public:
     unsigned int querySegmentCount() {return segmentCount;};
@@ -170,6 +178,9 @@ public:
     void setProcessorMasks(std::vector<processor::ProcessorIndex_t> & processorMasks);
     bool isProcessorMaskEnabled() {return processorMaskEnabled;};
     bool isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalIndex);
+    ProcessorAffinity_t queryProcessorAffinity() {return processorAffinity;};
+    TaskPreemption_t queryTaskPreemption() {return taskPreemption;};
+    SegmentState_t queryTaskState();
 
     TaskRTProperty_t queryTaskRTProperty() {return taskRealTimeProperty;};
 
@@ -233,6 +244,9 @@ public:
     bool createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
 
     Task & getTask(ProcessorAffinity_t processorAffinity);
+    Task & getReadyTask();
+    // TODO: Support DAG tasks where multiple subtasks are ready simultaneously.
+    std::vector<Task *> getReadyTasks() {return {};};
     bool createNewSegmentForTask(ProcessorAffinity_t processorAffinity, SegmentLength_t segmentLength);
 
     /**
@@ -245,6 +259,7 @@ public:
 
     void setTaskPeriod(TimeStamp_t taskPeroid) {this->taskPeriod = taskPeriod;};
     void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
+    void setTaskRTPriority(TaskRTPriority_t priority) {this->heterSSTaskPriority = priority;};
 
     double queryTaskUtilization();
     double querySingleTaskUtilization(ProcessorAffinity_t processorAffinity);

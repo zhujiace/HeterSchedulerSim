@@ -28,9 +28,9 @@ const std::string ProcessorTypeNames[10] = {
 
 enum ProcessorState_t {
     IDLE,
-    BUSY,
+    BUSYPREEMPTIVE,
+    BUSYNONPREEMPTIVE,
     DEAD,
-    NONPREEMPTIVE,
     UNKNOWN
 };
 
@@ -63,8 +63,10 @@ public:
     Task & getCurrentTask() {return *currentTask;};
 
     /**
-     * @brief Schedule the given task on this processor, taking account
-     * the processor affinity and preemption property.
+     * @brief Schedule (as a decision) the given task on this processor, taking account
+     * the processor affinity and preemption property. Though the schedule command is only
+     * called from the processor side, the task state is changed internally after the
+     * schedule is called.
     */
     bool scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp);
 
