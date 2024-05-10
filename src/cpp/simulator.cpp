@@ -33,8 +33,8 @@ bool Simulator::sortProcessorsByType() {
     unsigned int lastCount = 0;
     for (auto & processor : processors) {
         if (processor.queryProcessorType() != lastType) {
-                lastCount = 0;
-                lastType = processor.queryProcessorType();
+            lastCount = 0;
+            lastType = processor.queryProcessorType();
         }
         processor.setProcessorInternalIndex(lastCount++);
     }

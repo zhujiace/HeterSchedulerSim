@@ -89,7 +89,7 @@ public:
 
     // Simulate the behavior: either execute the task or keep idle
     // Update the processor state if necessary
-    bool workProcessor();
+    bool workProcessor(task::TimeStamp_t timeStamp);
 };
 
 #endif // processor.h

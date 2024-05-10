@@ -159,6 +159,7 @@ public:
      * @return True if segment is succuessfully executed, otherwise false.
     */
     bool executeSegment(SegmentIndex_t segmentIndex, TimeStamp_t timeStamp);
+    bool executeFirstReadySegment(TimeStamp_t timeStamp);
     /**
      * @brief Create one new segment and inserted in the back
     */
@@ -200,8 +201,8 @@ class SSTask : public Task {
 
 public:
     // Override the base class method, update the task state and current index.
-    bool executeSegment(SegmentIndex_t SegmentIndex);
-    SSTaskState_t querySSTaskState();
+    bool executeSegment(SegmentIndex_t SegmentIndex) {return true;};
+    SSTaskState_t querySSTaskState() {return SSTaskState;};
     Segment & getCurrentSegment() {return segments[currentSegmentIndex];};
 };
 
