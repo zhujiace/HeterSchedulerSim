@@ -105,3 +105,89 @@ bool HeterSSTask::checkWhetherMissDDL(TimeStamp_t currentTime) {
 HeterSSTaskState_t HeterSSTask::queryHeterSSTaskState() {
     return heterSSTaskState;
 }
+
+SegmentLength_t Task::querySegmentExecutionTime() {
+    SegmentLength_t res = 0;
+    for (Segment & seg : segments)
+        res += seg.querySegmentLength();
+    return res;
+}
+
+bool Task::isTaskCompleted() {
+    for (Segment & seg : segments)
+        if (!seg.isSegmentCompleted()) return false;
+    return true;
+}
+
+bool Task::executeSegment(SegmentIndex_t segmentIndex, TimeStamp_t timeStamp) {
+    return segments[segmentIndex].executeSegment(timeStamp);
+}
+
+bool Task::executeFirstReadySegment(TimeStamp_t timeStamp) {
+    for (Segment & seg : segments)
+        if (seg.isSegmentReady())
+            return seg.executeSegment(timeStamp);
+}
+
+bool Task::createNewSegment(SegmentLength_t segmentLength) {
+    unsigned int segmentCount = segments.size();
+    segments.push_back(Segment(segmentLength, segmentCount, taskPreemption));
+}
+
+
+bool Task::_resetAllSegments() {
+    for (Segment & seg : segments)
+       if (!seg.resetSegment()) return false;
+    return true;
+}
+
+bool Task::isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalIndex) {
+    for (ProcessorIndex_t index : processorMasks)
+        if (processorGlobalIndex == index)
+            return true;
+    return false;
+}
+
+SegmentState_t Task::queryTaskState() {
+    SegmentState_t res = NOTREADY;
+    for (Segment & seg: segments)
+        if (seg.isSegmentReady()) return SegmentState_t::READY;
+    if (isTaskCompleted()) return SegmentState_t::FINISHED;
+    return res;
+}
+
+void Task::setSegmentDependency(SegmentIndex_t segment1, SegmentIndex_t segment2) {
+    segments[segment2].addToDependency(segments[segment1]);
+}
+
+bool Task::setTaskScheduled() {
+    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::EXECUTING);
+}
+
+bool Task::setTaskPreempted() {
+    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::READY);
+}
+
+void Segment::addToDependency(Segment & segment) {
+    dependentSegments.push_back(&segment);
+    segment.dependentedBySegments.push_back(this);
+}
+
+bool Segment::isSegmentReady() {
+    for (unsigned int i = 0; i < dependentSegments.size(); i++)
+        if (!dependentSegments[i]->isSegmentCompleted()) return false;
+    markSegmentReady();
+    return true;
+}
+
+bool Segment::resetSegment() {
+    executedAt.clear();
+    segmentRemainLength = segmentLength;
+}
+
+bool Segment::executeSegment(TimeStamp_t timeStamp) {
+    if (segmentRemainLength<=0) return false;
+    if (!executedAt.empty() && executedAt.back()+1!=timeStamp) return false;
+    segmentRemainLength--;
+    executedAt.push_back(timeStamp);
+}

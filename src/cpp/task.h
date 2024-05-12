@@ -84,11 +84,8 @@ class Segment {
     SegmentIndex_t segmentIndex = 0;
 
     // The segment can be executed if and only if all the dependent segments are finished.
-    unsigned int dependencyCount;
     // The dependent segments may come from other tasks, set to nullptr if none.
     std::vector<Segment *> dependentSegments;
-
-    unsigned int dependentedByCount;
     std::vector<Segment *> dependentedBySegments;
 
     std::vector<TimeStamp_t> executedAt = {};
@@ -99,10 +96,11 @@ class Segment {
     bool segmentReady = false;
 public:
     bool isSegmentCompleted() {return segmentRemainLength==0;};
-    bool markSegmentReady() {segmentReady = true;};
+    void markSegmentReady() {segmentReady = true;};
     bool isSegmentReady();
     void addToDependency(Segment & segment);
-    bool configureDependency(std::vector<Segment *> segments);
+    bool configureDependency(std::vector<Segment *> & segments)
+        {dependentSegments = segments;}
     SegmentLength_t querySegmentLength() {return segmentLength;};
     SegmentLength_t querySegmentRemainLength() {return segmentRemainLength;};
     bool executeSegment(TimeStamp_t timeStamp);
@@ -133,7 +131,6 @@ protected:
     std::vector<processor::ProcessorIndex_t> processorMasks = {};
 
     TaskPreemption_t taskPreemption = PREEMPTIVE;
-    unsigned int segmentCount = 0;
     std::vector<Segment> segments = {};
     TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
 
@@ -150,7 +147,7 @@ protected:
     HeterSSTask * belongedHeterSSTask = nullptr;
 
 public:
-    unsigned int querySegmentCount() {return segmentCount;};
+    unsigned int querySegmentCount() {return segments.size();};
     SegmentLength_t querySegmentExecutionTime();
 
     bool isTaskCompleted();
@@ -177,7 +174,8 @@ public:
          processorAffinity(processorAffinity), taskPreemption(taskPreemption)
          {};
 
-    void setProcessorMasks(std::vector<processor::ProcessorIndex_t> & processorMasks);
+    void setProcessorMasks(std::vector<processor::ProcessorIndex_t> & processorMasks)
+        {this->processorMasks = processorMasks;};
     bool isProcessorMaskEnabled() {return processorMaskEnabled;};
     bool isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalIndex);
     ProcessorAffinity_t queryProcessorAffinity() {return processorAffinity;};
@@ -283,6 +281,7 @@ public:
     bool releaseTask(TimeStamp_t currentTime);
     // Enumerate over all the subtasks
     HeterSSTaskState_t queryHeterSSTaskState();
+    void setHeterSSTaskState(HeterSSTaskState_t hstate) {heterSSTaskState = hstate;}
     bool isAllTasksCompleted();
     // true if miss
     bool checkWhetherMissDDL(TimeStamp_t currentTime);
