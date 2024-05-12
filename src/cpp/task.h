@@ -147,6 +147,7 @@ protected:
     // Argue: In this case, we should split the task
     bool ifParallel = false;
 
+    HeterSSTask * belongedHeterSSTask = nullptr;
 
 public:
     unsigned int querySegmentCount() {return segmentCount;};
@@ -181,12 +182,17 @@ public:
     bool isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalIndex);
     ProcessorAffinity_t queryProcessorAffinity() {return processorAffinity;};
     TaskPreemption_t queryTaskPreemption() {return taskPreemption;};
+    // Search all the tasks
     SegmentState_t queryTaskState();
 
     TaskRTProperty_t queryTaskRTProperty() {return taskRealTimeProperty;};
 
     bool setTaskScheduled();
+    // consider changes on heter ss task
     bool setTaskPreempted();
+    void setFirstSegmentReady() {segments[0].markSegmentReady();}
+    void setBelongedHeterSSTaskset(HeterSSTask * htask) {belongedHeterSSTask = htask;}
+    HeterSSTask * getBelongHeterSSTaskset() {return belongedHeterSSTask;}
 
     /**
      * @brief Configure dependency: seg2 depends on seg1
@@ -231,11 +237,12 @@ class HeterSSTask {
     unsigned int processorTypeCount = 0;
 
     TimeStamp_t taskRelativeDeadline = 0;
+    TimeStamp_t taskAbsoluteDeadline = 0;
     TimeStamp_t taskExecutionTime = 0;
 
     TimeStamp_t taskPeriod = 0;
 
-    HeterSSTaskState_t heterSSTaskState = HeterSSTaskState_t::FINISHED;
+    HeterSSTaskState_t heterSSTaskState = HeterSSTaskState_t::UNKNOWN;
 
     TaskRTPriority_t heterSSTaskPriority = 99;
     TaskRTSchedulePolicy_t heterSSTaskSchedulePolicy = HETER_SCHED_FIFO;
@@ -265,6 +272,7 @@ public:
 
     TimeStamp_t queryTaskPeriod() {return taskPeriod;}
     TimeStamp_t queryTaskRelativeDeadline() {return taskRelativeDeadline;}
+    TaskRTPriority_t queryTaskRTPriority() {return heterSSTaskPriority;}
     void setTaskPeriod(TimeStamp_t taskPeroid) {this->taskPeriod = taskPeriod;};
     void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
     void setTaskRTPriority(TaskRTPriority_t priority) {this->heterSSTaskPriority = priority;};
@@ -279,7 +287,6 @@ public:
     // true if miss
     bool checkWhetherMissDDL(TimeStamp_t currentTime);
 
-    bool scheduleTask(Processor & processor);
 };
 
 #endif // task.h

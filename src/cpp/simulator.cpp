@@ -56,23 +56,7 @@ HeterSSTask & Simulator::createNewHeterSSTask() {
 HeterSSTask & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType,
                                                         std::vector<unsigned int> segments) {
     HeterSSTask & result = createNewHeterSSTask();
-    // Initialize each sub tasks
-    for (ProcessorAffinity_t types : processorType) {
-        result.createNewRTTask(types, queryProcessorPreemptionBasedonType(types));
-    }
-    // Insert segments into the tasks
-    unsigned int processorTypeCount = processorType.size();
-    for (unsigned int i = 0; i < segments.size(); i++) {
-        unsigned int processorTypeIndex = i%processorTypeCount;
-        result.createNewSegmentForTask(processorType[processorTypeIndex], segments[i]);
-    }
-    // Configure the dependencies
-    for (ProcessorAffinity_t types : processorType) {
-        Task & task = result.getTask(types);
-        unsigned int segCount = task.querySegmentCount();
-        for (unsigned int i = 1; i < segCount; i++)
-            task.setSegmentDependency(i-1, i);
-    }
+    result.initializeTaskByVector(processorType, segments);
 }
 
 void Simulator::checkTaskRelease() {
@@ -89,7 +73,7 @@ void Simulator::updateProcessorAndTask() {
     if (!taskReleaseCheckedThisRound) checkTaskRelease();
 
     for (Processor & processor: processors) {
-        processor.workProcessor();
+        processor.workProcessor(currentTimeStamp);
     }
 
     for (HeterSSTask & htask: heterSSTaskset) {

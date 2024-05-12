@@ -16,6 +16,7 @@ bool Processor::scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp)
     }
 
     currentTask = &(taskToSchedule);
+    currentTaskPriority = currentTask->getBelongHeterSSTaskset()->queryTaskRTPriority();
     taskToSchedule.setTaskScheduled();
     processorState = BUSYNONPREEMPTIVE;
     if (processorPreemption!=ProcessorPreemption_t::PREEMPTIVE)

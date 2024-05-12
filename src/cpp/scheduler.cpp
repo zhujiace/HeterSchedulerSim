@@ -66,31 +66,35 @@ bool Scheduler::makeScheduleDecisions() {
         if (simulator.queryHeterSSTaskState(i)!=HeterSSTaskState_t::READY)
             continue;
         Task & task = simulator.getHeterSSTask(i).getReadyTask();
-        Processor * availableProcesser = nullptr;
+        Processor * availableProcessor = nullptr;
         for (ProcessorIndex_t j = 0; j < simulator.queryProcessorCount(); j++) {
             if (simulator.getProcessor(j).queryProcessorType()!=task.queryProcessorAffinity())
                 continue;
             if (simulator.queryProcessorState(j)==ProcessorState_t::IDLE) {
-                availableProcesser = &(simulator.getProcessor(j));
+                availableProcessor = &(simulator.getProcessor(j));
                 break;
             }
         }
 
         // No idle processors and the task is a preemptive task,
         // Search for preemptive processor of this task
-        if (!availableProcesser && task.queryTaskPreemption()==TaskPreemption_t::PREEMPTIVE) {
+        // Need to check the taskset priority
+        if (!availableProcessor && task.queryTaskPreemption()==TaskPreemption_t::PREEMPTIVE) {
             for (ProcessorIndex_t j = 0; j < simulator.queryProcessorCount(); j++) {
                 if (simulator.getProcessor(j).queryProcessorType()!=task.queryProcessorAffinity())
                     continue;
-                if (simulator.queryProcessorState(j)==ProcessorState_t::BUSYPREEMPTIVE) {
-                    availableProcesser = &(simulator.getProcessor(j));
-                    break;
-                }
+                if (simulator.queryProcessorState(j)!=ProcessorState_t::BUSYPREEMPTIVE)
+                    continue;
+                if (simulator.getProcessor(j).queryProcessorCurrentTaskPriority()
+                >= simulator.getHeterSSTask(i).queryTaskRTPriority())
+                    continue;
+                availableProcessor = &(simulator.getProcessor(j));
+                break;
             }
         }
 
-        if (availableProcesser) {
-            availableProcesser->scheduleTask(task, simulator.queryCurrentTimeStamp());
+        if (availableProcessor) {
+            availableProcessor->scheduleTask(task, simulator.queryCurrentTimeStamp());
         } else {
             // No available processor, do nothing
         }

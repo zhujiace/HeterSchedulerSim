@@ -52,10 +52,14 @@ protected:
 
     Task * currentTask = nullptr;
 
+    TaskRTPriority_t currentTaskPriority = 99;
+
 public:
     ProcessorType_t queryProcessorType() {return processorType;};
     ProcessorState_t queryProcessorState() {return processorState;};
     ProcessorIndex_t queryProcessorGlobalIndex() {return processorGlobalIndex;};
+
+    TaskRTPriority_t queryProcessorCurrentTaskPriority() {return currentTaskPriority;}
 
     void setProcessorInternalIndex(ProcessorIndex_t processorInternalIndex)
         {this->processorInternalIndex = processorInternalIndex;}
