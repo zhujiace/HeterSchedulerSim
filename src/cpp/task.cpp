@@ -27,6 +27,7 @@ bool HeterSSTask::initializeTaskByVector(std::vector<ProcessorAffinity_t> proces
         for (unsigned int i = 1; i < segCount; i++)
             task.setSegmentDependency(i-1, i);
     }
+    return true;
 }
 
 bool HeterSSTask::createNewSegmentForTask(ProcessorAffinity_t processorAffinity,
@@ -61,7 +62,7 @@ Task & HeterSSTask::getTask(ProcessorAffinity_t processorAffinity) {
 
 Task & HeterSSTask::getReadyTask() {
     for (Task & task : internalTasks)
-        if (task.queryTaskState()==SegmentState_t::READY)
+        if (task.queryTaskState()==SegmentState_t::SEG_READY)
             return task;
     return internalTasks[0];
 }
@@ -71,6 +72,7 @@ double HeterSSTask::queryTaskUtilization() {
     double utilizationSum = 0.0;
     for (Task & task : internalTasks)
         utilizationSum += double(taskPeriod) / task.querySegmentExecutionTime();
+    return utilizationSum;
 }
 
 double HeterSSTask::querySingleTaskUtilization(ProcessorAffinity_t processorAffinity) {
@@ -85,19 +87,20 @@ bool HeterSSTask::releaseTask(TimeStamp_t currentTime) {
     
     internalTasks[0].setFirstSegmentReady();
     taskAbsoluteDeadline = taskPeriod + currentTime;
-    heterSSTaskState = HeterSSTaskState_t::READY;
+    heterSSTaskState = HeterSSTaskState_t::TASKS_READY;
+    return true;
 }
 
 bool HeterSSTask::isAllTasksCompleted() {
     for (Task & task : internalTasks)
         if (!task.isTaskCompleted()) return false;
-    heterSSTaskState = HeterSSTaskState_t::FINISHED;
+    heterSSTaskState = HeterSSTaskState_t::TASKS_FINISHED;
     return true;
 }
 
 bool HeterSSTask::checkWhetherMissDDL(TimeStamp_t currentTime) {
     bool res = (currentTime > taskAbsoluteDeadline);
-    if (res) heterSSTaskState = MISSDDL;
+    if (res) heterSSTaskState = TASKS_MISSDDL;
     return res;
 }
 
@@ -127,11 +130,13 @@ bool Task::executeFirstReadySegment(TimeStamp_t timeStamp) {
     for (Segment & seg : segments)
         if (seg.isSegmentReady())
             return seg.executeSegment(timeStamp);
+    return false;
 }
 
 bool Task::createNewSegment(SegmentLength_t segmentLength) {
     unsigned int segmentCount = segments.size();
     segments.push_back(Segment(segmentLength, segmentCount, taskPreemption));
+    return true;
 }
 
 
@@ -149,10 +154,10 @@ bool Task::isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalInd
 }
 
 SegmentState_t Task::queryTaskState() {
-    SegmentState_t res = NOTREADY;
+    SegmentState_t res = SegmentState_t::SEG_NOTREADY;
     for (Segment & seg: segments)
-        if (seg.isSegmentReady()) return SegmentState_t::READY;
-    if (isTaskCompleted()) return SegmentState_t::FINISHED;
+        if (seg.isSegmentReady()) return SegmentState_t::SEG_READY;
+    if (isTaskCompleted()) return SegmentState_t::SEG_FINISHED;
     return res;
 }
 
@@ -161,11 +166,13 @@ void Task::setSegmentDependency(SegmentIndex_t segment1, SegmentIndex_t segment2
 }
 
 bool Task::setTaskScheduled() {
-    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::EXECUTING);
+    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::TASKS_EXECUTING);
+    return true;
 }
 
 bool Task::setTaskPreempted() {
-    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::READY);
+    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::TASKS_READY);
+    return true;
 }
 
 void Segment::addToDependency(Segment & segment) {
@@ -182,7 +189,9 @@ bool Segment::isSegmentReady() {
 
 bool Segment::resetSegment() {
     executedAt.clear();
+    if (segmentRemainLength !=0) return false;
     segmentRemainLength = segmentLength;
+    return true;
 }
 
 bool Segment::executeSegment(TimeStamp_t timeStamp) {
@@ -190,4 +199,5 @@ bool Segment::executeSegment(TimeStamp_t timeStamp) {
     if (!executedAt.empty() && executedAt.back()+1!=timeStamp) return false;
     segmentRemainLength--;
     executedAt.push_back(timeStamp);
+    return true;
 }

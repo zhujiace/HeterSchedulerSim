@@ -63,7 +63,7 @@ bool Scheduler::makeScheduleDecisions() {
     simulator.sortHeterSSTasksByPriority();
 
     for (HeterTaskIndex_t i = 0; i < simulator.queryHeterSSTaskCount(); i++) {
-        if (simulator.queryHeterSSTaskState(i)!=HeterSSTaskState_t::READY)
+        if (simulator.queryHeterSSTaskState(i)!=HeterSSTaskState_t::TASKS_READY)
             continue;
         Task & task = simulator.getHeterSSTask(i).getReadyTask();
         Processor * availableProcessor = nullptr;
@@ -83,7 +83,7 @@ bool Scheduler::makeScheduleDecisions() {
             for (ProcessorIndex_t j = 0; j < simulator.queryProcessorCount(); j++) {
                 if (simulator.getProcessor(j).queryProcessorType()!=task.queryProcessorAffinity())
                     continue;
-                if (simulator.queryProcessorState(j)!=ProcessorState_t::BUSYPREEMPTIVE)
+                if (simulator.queryProcessorState(j)!=ProcessorState_t::BUSY_PREEMPTIVE)
                     continue;
                 if (simulator.getProcessor(j).queryProcessorCurrentTaskPriority()
                 >= simulator.getHeterSSTask(i).queryTaskRTPriority())
@@ -100,5 +100,5 @@ bool Scheduler::makeScheduleDecisions() {
         }
 
     }
-
+    return true;
 }

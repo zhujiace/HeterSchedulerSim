@@ -9,6 +9,7 @@
 
 int main () {
     
+    std::cout << "Start Testing...\n";
     Scheduler scheduler;
     scheduler.startScheduleLoop();
 

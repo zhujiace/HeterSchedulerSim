@@ -23,7 +23,6 @@ enum TaskRTProperty_t {
     HARDRT,
     SOFTRT,
     NONERT, // Current simulator does not support none RT Task.
-    UNKNOWN
 };
 
 typedef TaskPreemption_t SegmentPreemption_t;
@@ -33,25 +32,24 @@ typedef unsigned int SegmentIndex_t;
 typedef unsigned int HeterTaskIndex_t;
 
 enum SegmentState_t {
-    READY,
-    NOTREADY,
-    FINISHED,
+    SEG_READY,
+    SEG_NOTREADY,
+    SEG_FINISHED,
     UNKNWON
 };
 
 enum SSTaskState_t {
-    EXECUTING,
-    SUSPENSION,
-    READY,
-    UNKNOWN,
+    SS_EXECUTING,
+    SS_SUSPENSION,
+    SS_READY,
 };
 
 enum HeterSSTaskState_t {
-    EXECUTING,
-    FINISHED,
-    READY,
-    MISSDDL,
-    UNKNOWN,
+    TASKS_EXECUTING,
+    TASKS_FINISHED,
+    TASKS_READY,
+    TASKS_MISSDDL,
+    TASKS_UNKNOWN,
 };
 
 typedef unsigned long long TimeStamp_t;
@@ -77,7 +75,7 @@ using namespace task;
  * @brief Describe a segment (SS Task Model) or node (DAG Task Model). 
 */
 class Segment {
-    SegmentPreemption_t segmentPreemption = PREEMPTIVE;
+    SegmentPreemption_t segmentPreemption = SegmentPreemption_t::PREEMPTIVE;
     SegmentLength_t segmentLength = 0;
     SegmentLength_t segmentRemainLength;
     // The segment index inside its task.
@@ -99,7 +97,7 @@ public:
     void markSegmentReady() {segmentReady = true;};
     bool isSegmentReady();
     void addToDependency(Segment & segment);
-    bool configureDependency(std::vector<Segment *> & segments)
+    void configureDependency(std::vector<Segment *> & segments)
         {dependentSegments = segments;}
     SegmentLength_t querySegmentLength() {return segmentLength;};
     SegmentLength_t querySegmentRemainLength() {return segmentRemainLength;};
@@ -120,6 +118,9 @@ public:
     bool resetSegment();
 };
 
+
+class HeterSSTask;
+
 /**
  * @brief Class on task, can inherit to SSTask or DAGTask.
 */
@@ -128,9 +129,9 @@ class Task {
 protected:
     ProcessorAffinity_t processorAffinity = CPU;
     bool processorMaskEnabled = false;
-    std::vector<processor::ProcessorIndex_t> processorMasks = {};
+    std::vector<unsigned int> processorMasks = {};
 
-    TaskPreemption_t taskPreemption = PREEMPTIVE;
+    TaskPreemption_t taskPreemption = TaskPreemption_t::PREEMPTIVE;
     std::vector<Segment> segments = {};
     TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
 
@@ -174,10 +175,10 @@ public:
          processorAffinity(processorAffinity), taskPreemption(taskPreemption)
          {};
 
-    void setProcessorMasks(std::vector<processor::ProcessorIndex_t> & processorMasks)
+    void setProcessorMasks(std::vector<unsigned int> & processorMasks)
         {this->processorMasks = processorMasks;};
     bool isProcessorMaskEnabled() {return processorMaskEnabled;};
-    bool isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalIndex);
+    bool isInsideProcessorMasks(unsigned int processorGlobalIndex);
     ProcessorAffinity_t queryProcessorAffinity() {return processorAffinity;};
     TaskPreemption_t queryTaskPreemption() {return taskPreemption;};
     // Search all the tasks
@@ -216,6 +217,7 @@ class DAGTask : public Task {
 
 };
 
+class Processor;
 
 /**
  * @brief Represent one task (tau_i) in heterogenous computing platform, 
@@ -240,7 +242,7 @@ class HeterSSTask {
 
     TimeStamp_t taskPeriod = 0;
 
-    HeterSSTaskState_t heterSSTaskState = HeterSSTaskState_t::UNKNOWN;
+    HeterSSTaskState_t heterSSTaskState = HeterSSTaskState_t::TASKS_UNKNOWN;
 
     TaskRTPriority_t heterSSTaskPriority = 99;
     TaskRTSchedulePolicy_t heterSSTaskSchedulePolicy = HETER_SCHED_FIFO;

@@ -28,18 +28,29 @@ const std::string ProcessorTypeNames[10] = {
 
 enum ProcessorState_t {
     IDLE,
-    BUSYPREEMPTIVE,
-    BUSYNONPREEMPTIVE,
-    DEAD,
+    BUSY_PREEMPTIVE,
+    BUSY_NONPREEMPTIVE,
+    DEAD
+};
+
+enum ProcessorPreemption_t {
+    PREEMPTIVE,
+    NONPREEMPTIVE,
     UNKNOWN
 };
 
-typedef TaskPreemption_t ProcessorPreemption_t;
 typedef unsigned int ProcessorIndex_t;
 
 };
 
 using namespace processor;
+
+class Task;
+
+namespace task {
+    typedef unsigned char TaskRTPriority_t;
+    typedef unsigned long long TimeStamp_t;
+};
 
 class Processor {
 
@@ -52,14 +63,14 @@ protected:
 
     Task * currentTask = nullptr;
 
-    TaskRTPriority_t currentTaskPriority = 99;
+    task::TaskRTPriority_t currentTaskPriority = 99;
 
 public:
     ProcessorType_t queryProcessorType() {return processorType;};
     ProcessorState_t queryProcessorState() {return processorState;};
     ProcessorIndex_t queryProcessorGlobalIndex() {return processorGlobalIndex;};
 
-    TaskRTPriority_t queryProcessorCurrentTaskPriority() {return currentTaskPriority;}
+    task::TaskRTPriority_t queryProcessorCurrentTaskPriority() {return currentTaskPriority;}
 
     void setProcessorInternalIndex(ProcessorIndex_t processorInternalIndex)
         {this->processorInternalIndex = processorInternalIndex;}
@@ -88,7 +99,7 @@ public:
               processorType(processorType), processorPreemption(ProcessorPreemption),
               processorGlobalIndex(processorGlobalIndex) {};
 
-    bool setProcessorState(ProcessorState_t processorNewState)
+    void setProcessorState(ProcessorState_t processorNewState)
         {processorState = processorNewState;};
 
     // Simulate the behavior: either execute the task or keep idle

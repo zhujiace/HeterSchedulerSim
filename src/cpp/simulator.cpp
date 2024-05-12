@@ -7,22 +7,24 @@ Copy Right. The EHPCL Authors.
 #include "simulator.h"
 
 ProcessorPreemption_t Simulator::queryProcessorPreemptionBasedonType(ProcessorType_t processorType) {
-    if (processorType==CPU) return PREEMPTIVE;
-    if (processorType==CPUBigCore) return PREEMPTIVE;
-    if (processorType==CPULittleCore) return PREEMPTIVE;
-    return NONPREEMPTIVE;
+    if (processorType==CPU) return ProcessorPreemption_t::PREEMPTIVE;
+    if (processorType==CPUBigCore) return ProcessorPreemption_t::PREEMPTIVE;
+    if (processorType==CPULittleCore) return ProcessorPreemption_t::PREEMPTIVE;
+    return ProcessorPreemption_t::NONPREEMPTIVE;
 }
 
 bool Simulator::createNewProcessor(processor::ProcessorType_t processorType) {
     unsigned int currentProcessorNum = processors.size();
     ProcessorPreemption_t processorPreemption = queryProcessorPreemptionBasedonType(processorType);
     processors.push_back(Processor(processorType, processorPreemption, currentProcessorNum));
+    return true;
 }
 
 bool Simulator::createNewProcessors(processor::ProcessorType_t processorType, 
                                     unsigned int processorCount) {
     for (unsigned int i = 0 ; i < processorCount; i++)
-        createNewProcessor(processorType);
+        if (!createNewProcessor(processorType)) return false;
+    return true;
 }
 
 bool Simulator::sortProcessorsByType() {
@@ -38,14 +40,15 @@ bool Simulator::sortProcessorsByType() {
         }
         processor.setProcessorInternalIndex(lastCount++);
     }
+    return true;
 }
 
 ProcessorState_t Simulator::queryProcessorState(ProcessorIndex_t processorGlobalIndex) {
-    processors[processorGlobalIndex].queryProcessorState();
+    return processors[processorGlobalIndex].queryProcessorState();
 }
 
 HeterSSTaskState_t Simulator::queryHeterSSTaskState(HeterTaskIndex_t heterTaskIndex) {
-    heterSSTaskset[heterTaskIndex].queryHeterSSTaskState();
+    return heterSSTaskset[heterTaskIndex].queryHeterSSTaskState();
 }
 
 HeterSSTask & Simulator::createNewHeterSSTask() {
@@ -57,6 +60,7 @@ HeterSSTask & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAff
                                                         std::vector<unsigned int> segments) {
     HeterSSTask & result = createNewHeterSSTask();
     result.initializeTaskByVector(processorType, segments);
+    return result;
 }
 
 void Simulator::checkTaskRelease() {
