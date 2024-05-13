@@ -27,11 +27,12 @@ bool Processor::scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp)
 
 bool Processor::workProcessor(task::TimeStamp_t timeStamp) {
     if (processorState == IDLE) return true;
-    currentTask->executeFirstReadySegment(timeStamp);
+    if (!currentTask->executeFirstReadySegment(timeStamp)) return false;
 
     // TODO: Add temporal records here
 
-    if (currentTask->isTaskCompleted()) {
+    if (currentTask->getReadySegments().size()==0) {
+        currentTask->getBelongHeterSSTaskset()->checkHeterSSTaskFinishOrReady();
         processorState = IDLE;
         currentTask = nullptr;
     }

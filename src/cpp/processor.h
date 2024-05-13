@@ -105,6 +105,23 @@ public:
     // Simulate the behavior: either execute the task or keep idle
     // Update the processor state if necessary
     bool workProcessor(task::TimeStamp_t timeStamp);
+
+    friend std::ostream & operator<<(std::ostream & os, const Processor & processor) {
+        os << std::string("State: ");
+        switch (processor.processorState) {
+            case IDLE:
+                os << std::string("idle");break;
+            case BUSY_PREEMPTIVE:
+                os << std::string("busy-preemptive");break;
+            case BUSY_NONPREEMPTIVE:
+                os << std::string("busy-nonpreemptive");break;
+            case DEAD:
+                os << std::string("dead");break;
+            default:
+                os << std::string("unknown");break;
+        }
+        return os;
+    }
 };
 
 #endif // processor.h

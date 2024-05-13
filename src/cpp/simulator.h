@@ -74,7 +74,7 @@ public:
      * @brief Check and release the periodic tasks according to current timestamp.
      * @attention This action should be called before making scheduling.
     */
-    void checkTaskRelease();
+    bool checkTaskRelease();
 
     /**
      * @brief Update all the processors and tasks by calling highLevel APIs.
@@ -92,6 +92,9 @@ public:
     bool doesTaskMissDeadline() {return taskMissDeadline;};
 
     ProcessorPreemption_t queryProcessorPreemptionBasedonType(ProcessorType_t processorType);
+
+    void printSimulatorStates();
+
 };
 
 

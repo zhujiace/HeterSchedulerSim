@@ -10,7 +10,7 @@ bool Scheduler::initializeSimulation() {
 
     simulator.createNewProcessors(CPU, 2);
     simulator.createNewProcessors(GPU, 2);
-    // It is recommended to sort in case create in a wrong order
+    // It is recommended to sort in case created in a wrong order
     simulator.sortProcessorsByType();
 
     simulator.initializeStorages();
@@ -46,11 +46,13 @@ bool Scheduler::startScheduleLoop() {
 
     while (! simulator.isSimulationCompleted()) {
 
-        simulator.checkTaskRelease();
+        if (!simulator.checkTaskRelease()) return false;
 
         // TODO: Make decisions here
         if (!makeScheduleDecisions())
             std::cerr << "Scheduling decisions are inproper!\n";
+
+        simulator.printSimulatorStates();
 
         simulator.updateProcessorAndTask();
     }

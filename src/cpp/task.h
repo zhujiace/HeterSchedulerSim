@@ -77,7 +77,7 @@ using namespace task;
 class Segment {
     SegmentPreemption_t segmentPreemption = SegmentPreemption_t::PREEMPTIVE;
     SegmentLength_t segmentLength = 0;
-    SegmentLength_t segmentRemainLength;
+    SegmentLength_t segmentRemainLength = 0;
     // The segment index inside its task.
     SegmentIndex_t segmentIndex = 0;
 
@@ -138,7 +138,7 @@ protected:
     bool taskCompleted = false;
 
     std::vector<SegmentState_t> segmentStates;
-    std::queue<Segment *> readySegments = {};
+    std::vector<Segment *> readySegments = {};
 
     // TODO: Future feature, to support parallel execution of 
     // segments inside this task.
@@ -197,6 +197,10 @@ public:
      * @brief Configure dependency: seg2 depends on seg1
     */
     void setSegmentDependency(SegmentIndex_t seg1, SegmentIndex_t seg2);
+    std::vector<Segment *> getReadySegments();
+    Segment & getSegment(SegmentIndex_t segmentIndex) {
+        return segments[segmentIndex];
+    }
 };
 
 class SSTask : public Task {
@@ -282,11 +286,29 @@ public:
 
     bool releaseTask(TimeStamp_t currentTime);
     // Enumerate over all the subtasks
+    void checkHeterSSTaskFinishOrReady();
     HeterSSTaskState_t queryHeterSSTaskState();
     void setHeterSSTaskState(HeterSSTaskState_t hstate) {heterSSTaskState = hstate;}
     bool isAllTasksCompleted();
     // true if miss
     bool checkWhetherMissDDL(TimeStamp_t currentTime);
+
+    friend std::ostream & operator<<(std::ostream & os, const HeterSSTask & task) {
+        os << std::string("State: ");
+        switch (task.heterSSTaskState) {
+            case TASKS_EXECUTING:
+                os << std::string("executing");break;
+            case TASKS_FINISHED:
+                os << std::string("finished");break;
+            case TASKS_READY:
+                os << std::string("ready");break;
+            case TASKS_MISSDDL:
+                os << std::string("missddl");break;
+            default:
+                os << std::string("unknown");break;
+        }
+        return os;
+    }
 
     HeterSSTask() {}
     HeterSSTask(const HeterSSTask & otherHeterTask);

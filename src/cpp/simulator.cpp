@@ -3,6 +3,7 @@ Copy Right. The EHPCL Authors.
 */
 
 #include <algorithm>
+#include <iostream>
 
 #include "simulator.h"
 
@@ -63,21 +64,24 @@ HeterSSTask & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAff
     return result;
 }
 
-void Simulator::checkTaskRelease() {
-    if (taskReleaseCheckedThisRound) return;
+bool Simulator::checkTaskRelease() {
+    if (taskReleaseCheckedThisRound) return true;
     for (HeterSSTask & htask: heterSSTaskset) {
         if (currentTimeStamp%htask.queryTaskPeriod()==0) {
-            htask.releaseTask(currentTimeStamp);
+            if (!htask.releaseTask(currentTimeStamp))
+                return false;
         }
     }
-    taskReleaseCheckedThisRound = true;
+    return (taskReleaseCheckedThisRound = true);
 }
 
 void Simulator::updateProcessorAndTask() {
     if (!taskReleaseCheckedThisRound) checkTaskRelease();
 
     for (Processor & processor: processors) {
-        processor.workProcessor(currentTimeStamp);
+        if (!processor.workProcessor(currentTimeStamp)) {
+            std::cout << "Processor working error!";
+        }
     }
 
     for (HeterSSTask & htask: heterSSTaskset) {
@@ -97,5 +101,18 @@ Task & Simulator::queryReadyTask(HeterTaskIndex_t heterTaskIndex) {
 void Simulator::initializeStorages() {
     heterSSTaskset.reserve(10);
     processors.reserve(10);
+}
+
+void Simulator::printSimulatorStates() {
+    std::cerr << "Current Timestamp: " << currentTimeStamp << std::endl;
+    unsigned int count = 0;
+    for (HeterSSTask & htask : heterSSTaskset) {
+        std::cerr << "HTask " << count++ << " " << htask << std::endl;
+    }
+    count = 0;
+    for (Processor & processor: processors) {
+        std::cerr << "Processor " << count++ << " " << processor << std::endl;
+    }
+    std::cerr << std::endl;
 }
 
