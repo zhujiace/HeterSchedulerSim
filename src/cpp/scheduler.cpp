@@ -13,17 +13,19 @@ bool Scheduler::initializeSimulation() {
     // It is recommended to sort in case create in a wrong order
     simulator.sortProcessorsByType();
 
+    simulator.initializeStorages();
+
     std::ifstream input_file;
     std:: cout << "Reading taskset infomation...\n";
     for (int i = 0; i < 5; i++) {
-        std::string filename = ".taskset_prop/task";
+        std::string filename = "/home/hamster/HeterSchedulerSim/test/.taskset_prop/task";
         // TODO: support task num > 10
         filename = filename + (char)(i+48);
         filename = filename + ".txt";
         input_file.open(filename);
         int deadlines;
         input_file >> deadlines;
-        std::vector<unsigned int> segments;
+        std::vector<unsigned int> segments(10);
         for (int j = 0; j < 2*5-1; j++){
             input_file >> segments[j];
         }

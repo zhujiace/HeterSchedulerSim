@@ -9,10 +9,14 @@
 
 int main () {
     
+    // Support schedule from processor side
+    // Segments - SegmentGroup - Tasks
+
     std::cout << "Start Testing...\n";
     Scheduler scheduler;
-    scheduler.startScheduleLoop();
+    scheduler.initializeSimulation();
+    bool res = scheduler.startScheduleLoop();
 
-    std::cout << "This is a test script for the simulator." << std::endl;
+    std::cout << "Schedule result: " << res << std::endl;
     return 0;
 }

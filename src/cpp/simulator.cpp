@@ -53,7 +53,7 @@ HeterSSTaskState_t Simulator::queryHeterSSTaskState(HeterTaskIndex_t heterTaskIn
 
 HeterSSTask & Simulator::createNewHeterSSTask() {
     heterSSTaskset.push_back(HeterSSTask());
-    return heterSSTaskset[heterSSTaskset.size()-1];
+    return heterSSTaskset.back();
 }
 
 HeterSSTask & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType,
@@ -66,7 +66,7 @@ HeterSSTask & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAff
 void Simulator::checkTaskRelease() {
     if (taskReleaseCheckedThisRound) return;
     for (HeterSSTask & htask: heterSSTaskset) {
-        if (htask.queryTaskPeriod()%currentTimeStamp==0) {
+        if (currentTimeStamp%htask.queryTaskPeriod()==0) {
             htask.releaseTask(currentTimeStamp);
         }
     }
@@ -92,5 +92,10 @@ void Simulator::updateProcessorAndTask() {
 Task & Simulator::queryReadyTask(HeterTaskIndex_t heterTaskIndex) {
     HeterSSTask & htask = heterSSTaskset[heterTaskIndex];
     return htask.getReadyTask();
+}
+
+void Simulator::initializeStorages() {
+    heterSSTaskset.reserve(10);
+    processors.reserve(10);
 }
 

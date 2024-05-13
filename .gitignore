@@ -40,3 +40,7 @@ CMakeFiles/
 compile_commands.json
 CMakeCache.txt
 cmake_install.cmake
+
+# Project Executables
+build/main
+test/main

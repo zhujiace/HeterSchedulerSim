@@ -33,6 +33,8 @@ class Simulator {
     //TODO: support more task types by adding other attributes.
 public:
 
+    void initializeStorages();
+
     /**
      * @brief Create one new processor and insert in the vector end,
      * set the temperate global index as vector index.

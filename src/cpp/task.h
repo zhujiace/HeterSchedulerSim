@@ -252,9 +252,9 @@ class HeterSSTask {
 public:
 
 
-    bool _createNewTask(TaskRTProperty_t taskRealTimeProperty, 
+    Task & _createNewTask(TaskRTProperty_t taskRealTimeProperty, 
                         ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
-    bool createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
+    Task & createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
 
     Task & getTask(ProcessorAffinity_t processorAffinity);
     Task & getReadyTask();
@@ -273,7 +273,7 @@ public:
     TimeStamp_t queryTaskPeriod() {return taskPeriod;}
     TimeStamp_t queryTaskRelativeDeadline() {return taskRelativeDeadline;}
     TaskRTPriority_t queryTaskRTPriority() {return heterSSTaskPriority;}
-    void setTaskPeriod(TimeStamp_t taskPeroid) {this->taskPeriod = taskPeriod;};
+    void setTaskPeriod(TimeStamp_t taskPeriod) {this->taskPeriod = taskPeriod;};
     void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
     void setTaskRTPriority(TaskRTPriority_t priority) {this->heterSSTaskPriority = priority;};
 
@@ -288,6 +288,8 @@ public:
     // true if miss
     bool checkWhetherMissDDL(TimeStamp_t currentTime);
 
+    HeterSSTask() {}
+    HeterSSTask(const HeterSSTask & otherHeterTask);
 };
 
 #endif // task.h

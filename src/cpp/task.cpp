@@ -42,15 +42,15 @@ bool HeterSSTask::createNewSegmentForTask(ProcessorAffinity_t processorAffinity,
 }
 
 
-bool HeterSSTask::createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption) {
+Task & HeterSSTask::createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption) {
     return _createNewTask(HARDRT, processorAffinity, taskPreemption);
 }
 
-bool HeterSSTask::_createNewTask(TaskRTProperty_t taskRealTimeProperty, 
+Task & HeterSSTask::_createNewTask(TaskRTProperty_t taskRealTimeProperty, 
                         ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption) {
     internalTasks.push_back(Task(taskRealTimeProperty, processorAffinity, taskPreemption));
     internalTasks.back().setBelongedHeterSSTaskset(this);
-    return true;
+    return internalTasks.back();
 }
 
 Task & HeterSSTask::getTask(ProcessorAffinity_t processorAffinity) {
@@ -107,6 +107,14 @@ bool HeterSSTask::checkWhetherMissDDL(TimeStamp_t currentTime) {
 
 HeterSSTaskState_t HeterSSTask::queryHeterSSTaskState() {
     return heterSSTaskState;
+}
+
+HeterSSTask::HeterSSTask(const HeterSSTask & otherHeterTask) {
+    if (this == & otherHeterTask) return;
+    *this = otherHeterTask;
+    for (unsigned int i = 0; i < internalTasks.size(); i++){
+        internalTasks[i].setBelongedHeterSSTaskset(this);
+    }
 }
 
 SegmentLength_t Task::querySegmentExecutionTime() {
