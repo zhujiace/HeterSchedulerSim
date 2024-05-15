@@ -66,6 +66,12 @@ protected:
     task::TaskRTPriority_t currentTaskPriority = 99;
 
 public:
+    Task & getCurrentTask() {return *currentTask;};
+
+    bool operator<(const Processor & other) const {
+        return processorType < other.processorType;
+    }
+
     ProcessorType_t queryProcessorType() {return processorType;};
     ProcessorState_t queryProcessorState() {return processorState;};
     ProcessorIndex_t queryProcessorGlobalIndex() {return processorGlobalIndex;};
@@ -77,11 +83,8 @@ public:
     void setProcessorGlobalIndex(ProcessorIndex_t processorGlobalIndex)
         {this->processorGlobalIndex = processorGlobalIndex;}
 
-    bool operator<(const Processor & other) const {
-        return processorType < other.processorType;
-    }
-
-    Task & getCurrentTask() {return *currentTask;};
+    void setProcessorState(ProcessorState_t processorNewState)
+        {processorState = processorNewState;};
 
     /**
      * @brief Schedule (as a decision) the given task on this processor, taking account
@@ -98,9 +101,6 @@ public:
               ProcessorIndex_t processorGlobalIndex):
               processorType(processorType), processorPreemption(ProcessorPreemption),
               processorGlobalIndex(processorGlobalIndex) {};
-
-    void setProcessorState(ProcessorState_t processorNewState)
-        {processorState = processorNewState;};
 
     // Simulate the behavior: either execute the task or keep idle
     // Update the processor state if necessary
