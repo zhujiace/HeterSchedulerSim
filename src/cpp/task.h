@@ -44,13 +44,21 @@ enum SSTaskState_t {
     SS_READY,
 };
 
-enum HeterSSTaskState_t {
-    TASKS_EXECUTING,
+enum TaskState_t {
+    TASKS_EXECUTING, // deprecated, tasks can be inter-parallel
     TASKS_FINISHED,
     TASKS_READY,
     TASKS_MISSDDL,
     TASKS_UNKNOWN,
 };
+
+/*enum HeterSSTaskState_t {
+    TASKS_EXECUTING,
+    TASKS_FINISHED,
+    TASKS_READY,
+    TASKS_MISSDDL,
+    TASKS_UNKNOWN,
+};*/
 
 typedef unsigned long long TimeStamp_t;
 
@@ -71,6 +79,9 @@ enum TaskRTSchedulePolicy_t {
 
 using namespace task;
 
+
+class Processor;
+
 /**
  * @brief Describe a segment (SS Task Model) or node (DAG Task Model). 
 */
@@ -81,10 +92,13 @@ class Segment {
     // The segment index inside its task.
     SegmentIndex_t segmentIndex = 0;
 
-    // The segment can be executed if and only if all the dependent segments are finished.
+    ProcessorAffinity_t segmentAffinity;
+    Processor * currentProcessor;
+
+    // The segment can be executed if and only if all the precedent segments are finished.
     // The dependent segments may come from other tasks, set to nullptr if none.
-    std::vector<Segment *> dependentSegments;
-    std::vector<Segment *> dependentedBySegments;
+    std::vector<Segment *> precedingSegments;
+    std::vector<Segment *> succeedingSegments;
 
     std::vector<TimeStamp_t> executedAt = {};
 
@@ -96,19 +110,27 @@ public:
     bool isSegmentCompleted() {return segmentRemainLength==0;};
     void markSegmentReady() {segmentReady = true;};
     bool isSegmentReady();
+    /**
+     * @brief Add the given segment to the precedingSegments
+     * @param segment reference to the prec segment
+    */
     void addToDependency(Segment & segment);
-    void configureDependency(std::vector<Segment *> & segments)
-        {dependentSegments = segments;}
+
     SegmentLength_t querySegmentLength() {return segmentLength;};
     SegmentLength_t querySegmentRemainLength() {return segmentRemainLength;};
+    ProcessorAffinity_t querySegmentProcessorAffinity() {return segmentAffinity;}
+    // may return false if the non-preemptive segment is not executed continuously
     bool executeSegment(TimeStamp_t timeStamp);
 
     // Default constructor: create an empty segment
     Segment() {};
-    Segment(SegmentLength_t segmentLength, SegmentIndex_t segmentIndex, 
-            SegmentPreemption_t SegmentPreemption):
-            segmentLength(segmentLength), segmentIndex(segmentIndex), segmentPreemption(segmentPreemption)
+    Segment(SegmentLength_t segmentLength, ProcessorAffinity_t processorAffinity):
+            segmentLength(segmentLength), segmentAffinity(processorAffinity)
             {};
+    Segment(SegmentLength_t segmentLength, ProcessorAffinity_t processorAffinity, 
+            SegmentPreemption_t SegmentPreemption):
+            segmentLength(segmentLength), segmentAffinity(processorAffinity),
+            segmentPreemption(segmentPreemption) {};
     
     /**
      * @brief Task may be period, the segment is reinited and executed again.
@@ -116,10 +138,10 @@ public:
      * e.g. reset before the segment has finished.
     */
     bool resetSegment();
+
+    void setCurrentProcessor(Processor * processor) {currentProcessor = processor;};
+    Processor & getCurrentProcessor() { return *currentProcessor;};
 };
-
-
-class HeterSSTask;
 
 /**
  * @brief Class on task, can inherit to SSTask or DAGTask.
@@ -127,31 +149,94 @@ class HeterSSTask;
 class Task {
 
 protected:
+
+    // Internal storage, the instances of segments
+    std::vector<Segment> segments = {};
+
+    // Internal fixed properties
     ProcessorAffinity_t processorAffinity = CPU;
+    TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
+
+    // TODO: Future feature, to support parallel execution of 
+    // segments inside this task.
+    bool ifParallel = false;
+
+    // Scheduling related properties
+    TimeStamp_t taskRelativeDeadline = 0;
+    TimeStamp_t taskAbsoluteDeadline = 0;
+    TimeStamp_t taskExecutionTime = 0;
+
+    TimeStamp_t taskPeriod = 0;
+    TaskRTPriority_t taskPriority = 99;
+    TaskRTSchedulePolicy_t taskSchedulePolicy = HETER_SCHED_FIFO;
+
+    // Runtime maintainance (storage)
+    TaskState_t taskState = TaskState_t::TASKS_UNKNOWN;
+   
     bool processorMaskEnabled = false;
     std::vector<unsigned int> processorMasks = {};
-
-    TaskPreemption_t taskPreemption = TaskPreemption_t::PREEMPTIVE;
-    std::vector<Segment> segments = {};
-    TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
 
     bool taskCompleted = false;
 
     std::vector<SegmentState_t> segmentStates;
     std::vector<Segment *> readySegments = {};
 
-    // TODO: Future feature, to support parallel execution of 
-    // segments inside this task.
-    // Argue: In this case, we should split the task
-    bool ifParallel = false;
-
-    HeterSSTask * belongedHeterSSTask = nullptr;
-
 public:
+
+    Segment & createNewSegment(ProcessorAffinity_t processorAffinity, SegmentLength_t segmentLength);
+
+    /**
+     * @brief Initialize the internal task vector by a given vector.
+     * @return False if the format is not correct, otherwise true.
+     * @example Input segments: Type = {CPU,GPU}, segments = {3,1,2,4,5} -> C-G-C-G-C.
+     * @attention Current version requires the processorTypes to be different.
+    */
+    bool initializeTaskByVector(std::vector<ProcessorAffinity_t> & processorType,
+                                std::vector<SegmentLength_t> & segments);
+
+    TimeStamp_t queryTaskPeriod() {return taskPeriod;}
+    TimeStamp_t queryTaskRelativeDeadline() {return taskRelativeDeadline;}
+    TaskRTPriority_t queryTaskRTPriority() {return taskPriority;}
+    void setTaskPeriod(TimeStamp_t taskPeriod) {this->taskPeriod = taskPeriod;};
+    void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
+    void setTaskRTPriority(TaskRTPriority_t priority) {this->taskPriority = priority;};
+
+    double queryTaskUtilization();
+    double querySingleTaskUtilization(ProcessorAffinity_t processorAffinity);
+
+    bool releaseTask(TimeStamp_t currentTime);
+    
+    TaskState_t checkTaskStates();
+    TaskState_t queryTaskState() {return taskState;}
+    void setTaskState(TaskState_t state) {taskState = state;}
+    
+    bool isAllSegmentsCompleted();
+    bool isTaskCompleted() {return isAllSegmentsCompleted();}
+    
+    // true if miss
+    bool checkWhetherMissDDL(TimeStamp_t currentTime);
+
+    // TODO: improve task status printing
+    friend std::ostream & operator<<(std::ostream & os, const Task & task) {
+        os << std::string("State: ");
+        switch (task.taskState) {
+            case TASKS_EXECUTING:
+                os << std::string("executing");break;
+            case TASKS_FINISHED:
+                os << std::string("finished");break;
+            case TASKS_READY:
+                os << std::string("ready");break;
+            case TASKS_MISSDDL:
+                os << std::string("missddl");break;
+            default:
+                os << std::string("unknown");break;
+        }
+        return os;
+    }
+
     unsigned int querySegmentCount() {return segments.size();};
     SegmentLength_t querySegmentExecutionTime();
 
-    bool isTaskCompleted();
     bool isSegmentReady(SegmentIndex_t segmentIndex) {return segments[segmentIndex].isSegmentReady();};
     /**
      * @brief Execute the given segment by 1 unit, need to take the preemption into account.
@@ -159,30 +244,20 @@ public:
     */
     bool executeSegment(SegmentIndex_t segmentIndex, TimeStamp_t timeStamp);
     bool executeFirstReadySegment(TimeStamp_t timeStamp);
-    /**
-     * @brief Create one new segment and inserted in the back
-    */
-    bool createNewSegment(SegmentLength_t segmentLength);
 
     bool _resetAllSegments();
     bool resetTask() {return _resetAllSegments();};
 
     // Default constructor: create an empty task
     Task() {};
-    Task(TaskRTProperty_t taskRealTimeProperty,
-         ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption):
-         taskRealTimeProperty(taskRealTimeProperty),
-         processorAffinity(processorAffinity), taskPreemption(taskPreemption)
-         {};
+    Task(TaskRTPriority_t taskPriority, TimeStamp_t taskPeriod):
+    taskPriority(taskPriority), taskPeriod(taskPeriod), taskRealTimeProperty(HARDRT)
+    {};
 
     void setProcessorMasks(std::vector<unsigned int> & processorMasks)
         {this->processorMasks = processorMasks;};
     bool isProcessorMaskEnabled() {return processorMaskEnabled;};
-    bool isInsideProcessorMasks(unsigned int processorGlobalIndex);
-    ProcessorAffinity_t queryProcessorAffinity() {return processorAffinity;};
-    TaskPreemption_t queryTaskPreemption() {return taskPreemption;};
-    // Search all the tasks
-    SegmentState_t queryTaskState();
+    bool isInsideProcessorMasks(unsigned int processorGlobalIndex) {return true;};
 
     TaskRTProperty_t queryTaskRTProperty() {return taskRealTimeProperty;};
 
@@ -190,14 +265,15 @@ public:
     // consider changes on heter ss task
     bool setTaskPreempted();
     void setFirstSegmentReady() {segments[0].markSegmentReady();}
-    void setBelongedHeterSSTaskset(HeterSSTask * htask) {belongedHeterSSTask = htask;}
-    HeterSSTask * getBelongHeterSSTaskset() {return belongedHeterSSTask;}
 
     /**
      * @brief Configure dependency: seg2 depends on seg1
     */
     void setSegmentDependency(SegmentIndex_t seg1, SegmentIndex_t seg2);
-    std::vector<Segment *> getReadySegments();
+    std::vector<Segment *> & getReadySegments();
+    std::vector<Segment *> & Task::queryReadySegments() {
+        return readySegments;
+    }
     Segment & getSegment(SegmentIndex_t segmentIndex) {
         return segments[segmentIndex];
     }
@@ -219,99 +295,6 @@ class DAGTask : public Task {
 
     // TODO
 
-};
-
-class Processor;
-
-/**
- * @brief Represent one task (tau_i) in heterogenous computing platform, 
- *  using the self-suspension model.
-*/
-class HeterSSTask {
-
-
-    /**
-     * @brief Different subtasks which combines to make the whole task, 
-     * executed in an interleaved pattern.
-     * @example C0-G0-C1-G1-C2-G2-C3, where Ci are CPU Task, Gi are GPU Task,
-     * each Ci or Gi is a Segment itself.
-    */
-    std::vector<Task> internalTasks = {};
-
-    unsigned int processorTypeCount = 0;
-
-    TimeStamp_t taskRelativeDeadline = 0;
-    TimeStamp_t taskAbsoluteDeadline = 0;
-    TimeStamp_t taskExecutionTime = 0;
-
-    TimeStamp_t taskPeriod = 0;
-
-    HeterSSTaskState_t heterSSTaskState = HeterSSTaskState_t::TASKS_UNKNOWN;
-
-    TaskRTPriority_t heterSSTaskPriority = 99;
-    TaskRTSchedulePolicy_t heterSSTaskSchedulePolicy = HETER_SCHED_FIFO;
-
-    Processor * currentProcessor = nullptr;
-
-public:
-
-
-    Task & _createNewTask(TaskRTProperty_t taskRealTimeProperty, 
-                        ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
-    Task & createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption);
-
-    Task & getTask(ProcessorAffinity_t processorAffinity);
-    Task & getReadyTask();
-    // TODO: Support DAG tasks where multiple subtasks are ready simultaneously.
-    std::vector<Task *> getReadyTasks() {return {};};
-    bool createNewSegmentForTask(ProcessorAffinity_t processorAffinity, SegmentLength_t segmentLength);
-
-    /**
-     * @brief Initialize the internal task vector by a given vector.
-     * @return False if the format is not correct, otherwise true.
-     * @example Input segments: Type = {CPU,GPU}, segments = {3,1,2,4,5} -> C-G-C-G-C.
-     * @attention Current version requires the processorTypes to be different.
-    */
-    bool initializeTaskByVector(std::vector<ProcessorAffinity_t> processorType, std::vector<SegmentLength_t> segments);
-
-    TimeStamp_t queryTaskPeriod() {return taskPeriod;}
-    TimeStamp_t queryTaskRelativeDeadline() {return taskRelativeDeadline;}
-    TaskRTPriority_t queryTaskRTPriority() {return heterSSTaskPriority;}
-    void setTaskPeriod(TimeStamp_t taskPeriod) {this->taskPeriod = taskPeriod;};
-    void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
-    void setTaskRTPriority(TaskRTPriority_t priority) {this->heterSSTaskPriority = priority;};
-
-    double queryTaskUtilization();
-    double querySingleTaskUtilization(ProcessorAffinity_t processorAffinity);
-
-    bool releaseTask(TimeStamp_t currentTime);
-    // Enumerate over all the subtasks
-    void checkHeterSSTaskFinishOrReady();
-    HeterSSTaskState_t queryHeterSSTaskState();
-    void setHeterSSTaskState(HeterSSTaskState_t hstate) {heterSSTaskState = hstate;}
-    bool isAllTasksCompleted();
-    // true if miss
-    bool checkWhetherMissDDL(TimeStamp_t currentTime);
-
-    friend std::ostream & operator<<(std::ostream & os, const HeterSSTask & task) {
-        os << std::string("State: ");
-        switch (task.heterSSTaskState) {
-            case TASKS_EXECUTING:
-                os << std::string("executing");break;
-            case TASKS_FINISHED:
-                os << std::string("finished");break;
-            case TASKS_READY:
-                os << std::string("ready");break;
-            case TASKS_MISSDDL:
-                os << std::string("missddl");break;
-            default:
-                os << std::string("unknown");break;
-        }
-        return os;
-    }
-
-    HeterSSTask() {}
-    HeterSSTask(const HeterSSTask & otherHeterTask);
 };
 
 #endif // task.h

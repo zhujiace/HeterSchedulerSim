@@ -4,135 +4,91 @@ Copy Right. The EHPCL Authors.
 
 #include "task.h"
 
-bool HeterSSTask::initializeTaskByVector(std::vector<ProcessorAffinity_t> processorType,
-                                        std::vector<SegmentLength_t> segments) {
-    internalTasks.clear();
-    // Initialize each sub tasks
-    for (ProcessorAffinity_t types : processorType) {
-        if (types==CPU || types==CPUBigCore || types==CPULittleCore)
-            createNewRTTask(types, TaskPreemption_t::PREEMPTIVE);
-        else
-            createNewRTTask(types, TaskPreemption_t::NONPREEMPTIVE);
-    }
-    // Insert segments into the tasks
-    unsigned int processorTypeCount = processorType.size();
-    for (unsigned int i = 0; i < segments.size(); i++) {
-        unsigned int processorTypeIndex = i%processorTypeCount;
-        createNewSegmentForTask(processorType[processorTypeIndex], segments[i]);
-    }
-    // Configure the dependencies
-    for (unsigned int i = 0; i < internalTasks[0].querySegmentCount(); i++) {
-        bool exitFlag = false;
-        if (i!=0) {
-            internalTasks[0].getSegment(i).addToDependency(
-                internalTasks[processorTypeCount-1].getSegment(i-1));
-        }
-        for (unsigned int j = 1; j < processorTypeCount; j++) {
-            if (internalTasks[j].querySegmentCount() <= i) break;
-            internalTasks[j].getSegment(i).addToDependency(
-                internalTasks[j-1].getSegment(i));
+/**
+ * @brief check the task state and update internal storage.
+ * @attention different from querying, will detail exam each segments
+*/
+TaskState_t Task::checkTaskStates() {
+    readySegments.clear();
+    readySegments.reserve(segments.size());
+    TaskState_t res = TASKS_FINISHED;
+    for (Segment & seg : segments) {
+        if (!seg.isSegmentCompleted()) {
+            res = TASKS_UNKNOWN;
+            if (seg.isSegmentReady()) {
+                res = TASKS_READY;
+                readySegments.push_back(&seg);
+            }
         }
     }
-    return true;
-}
-
-bool HeterSSTask::createNewSegmentForTask(ProcessorAffinity_t processorAffinity,
-                                          SegmentLength_t segmentLength) {
-    for (Task & task : internalTasks) {
-        if (task.queryProcessorAffinity()==processorAffinity) {
-            task.createNewSegment(segmentLength);
-            return true;
-        }
-    }
-    return false;
-}
-
-
-Task & HeterSSTask::createNewRTTask(ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption) {
-    return _createNewTask(HARDRT, processorAffinity, taskPreemption);
-}
-
-Task & HeterSSTask::_createNewTask(TaskRTProperty_t taskRealTimeProperty, 
-                        ProcessorAffinity_t processorAffinity, TaskPreemption_t taskPreemption) {
-    internalTasks.push_back(Task(taskRealTimeProperty, processorAffinity, taskPreemption));
-    internalTasks.back().setBelongedHeterSSTaskset(this);
-    return internalTasks.back();
-}
-
-Task & HeterSSTask::getTask(ProcessorAffinity_t processorAffinity) {
-    for (Task & task : internalTasks)
-        if (task.queryProcessorAffinity()==processorAffinity)
-            return task;
-    return internalTasks[0];
-}
-
-Task & HeterSSTask::getReadyTask() {
-    for (Task & task : internalTasks)
-        if (task.queryTaskState()==SegmentState_t::SEG_READY)
-            return task;
-    return internalTasks[0];
-}
-
-
-double HeterSSTask::queryTaskUtilization() {
-    double utilizationSum = 0.0;
-    for (Task & task : internalTasks)
-        utilizationSum += double(taskPeriod) / task.querySegmentExecutionTime();
-    return utilizationSum;
-}
-
-double HeterSSTask::querySingleTaskUtilization(ProcessorAffinity_t processorAffinity) {
-    Task & task = getTask(processorAffinity);
-    return double(taskPeriod) / task.querySegmentExecutionTime();
-}
-
-
-bool HeterSSTask::releaseTask(TimeStamp_t currentTime) {
-    for (Task & task : internalTasks) 
-        if (!task.resetTask()) return false;
-    
-    internalTasks[0].setFirstSegmentReady();
-    taskAbsoluteDeadline = taskPeriod + currentTime;
-    heterSSTaskState = HeterSSTaskState_t::TASKS_READY;
-    return true;
-}
-
-bool HeterSSTask::isAllTasksCompleted() {
-    for (Task & task : internalTasks)
-        if (!task.isTaskCompleted()) return false;
-    heterSSTaskState = HeterSSTaskState_t::TASKS_FINISHED;
-    return true;
-}
-
-bool HeterSSTask::checkWhetherMissDDL(TimeStamp_t currentTime) {
-    if (heterSSTaskState == TASKS_FINISHED) return false;
-    bool res = (currentTime > taskAbsoluteDeadline);
-    if (res) heterSSTaskState = TASKS_MISSDDL;
+    if (res == TASKS_UNKNOWN) res = TASKS_FINISHED;
     return res;
 }
 
 
-HeterSSTaskState_t HeterSSTask::queryHeterSSTaskState() {
-    return heterSSTaskState;
+Segment & Task::createNewSegment(ProcessorAffinity_t processorAffinity, SegmentLength_t segmentLength) {
+    if (processorAffinity==CPU || processorAffinity==CPUBigCore || processorAffinity==CPULittleCore)
+        this->segments.push_back(Segment(segmentLength, processorAffinity, SegmentPreemption_t::PREEMPTIVE));
+    else
+        this->segments.push_back(Segment(segmentLength, processorAffinity, SegmentPreemption_t::NONPREEMPTIVE));
+    return segments.back();
 }
 
-void HeterSSTask::checkHeterSSTaskFinishOrReady() {
-    HeterSSTaskState_t res = TASKS_FINISHED;
-    for (Task & task : internalTasks)
-        if (!task.isTaskCompleted()) {
-            setHeterSSTaskState(TASKS_READY);
-            return;
-        }
-    setHeterSSTaskState(res);
-}
+bool Task::initializeTaskByVector(std::vector<ProcessorAffinity_t> & processorType,
+                                  std::vector<SegmentLength_t> & segments) {
+    this->segments.clear();
+    this->segments.reserve(segments.size());
 
-HeterSSTask::HeterSSTask(const HeterSSTask & otherHeterTask) {
-    if (this == & otherHeterTask) return;
-    *this = otherHeterTask;
-    for (unsigned int i = 0; i < internalTasks.size(); i++){
-        internalTasks[i].setBelongedHeterSSTaskset(this);
+    // Insert segments into the tasks
+    // Configure the dependencies
+    unsigned int processorTypeCount = processorType.size();
+    for (unsigned int i = 0; i < segments.size(); i++) {
+        unsigned int processorTypeIndex = i%processorTypeCount;
+        ProcessorAffinity_t type = processorType[processorTypeIndex];
+        createNewSegment(type, segments[i]);
+        if (i!=0) this->segments[i].addToDependency(this->segments[i-1]);
     }
+    return true;
 }
+
+
+SegmentLength_t Task::querySegmentExecutionTime() {
+    SegmentLength_t totalSegmentLength = 0;
+    for (Segment & seg : segments)
+        totalSegmentLength += seg.querySegmentLength();
+    return totalSegmentLength;
+}
+
+double Task::queryTaskUtilization() {
+    return querySegmentExecutionTime() / double(taskPeriod);
+}
+
+double Task::querySingleTaskUtilization(ProcessorAffinity_t processorAffinity) {
+    SegmentLength_t totalSegmentLength = 0;
+    for (Segment & seg : segments)
+        if (seg.querySegmentProcessorAffinity()==processorAffinity)
+            totalSegmentLength += seg.querySegmentLength();
+    return totalSegmentLength / double(taskPeriod);
+}
+
+
+bool Task::releaseTask(TimeStamp_t currentTime) {
+    if (!resetTask()) return false;
+    
+    setFirstSegmentReady();
+    taskAbsoluteDeadline = taskPeriod + currentTime;
+    this->taskState = TaskState_t::TASKS_READY;
+    return true;
+}
+
+
+bool Task::checkWhetherMissDDL(TimeStamp_t currentTime) {
+    if (taskState == TASKS_FINISHED) return false;
+    bool res = (currentTime > taskAbsoluteDeadline);
+    if (res) taskState = TASKS_MISSDDL;
+    return res;
+}
+
 
 SegmentLength_t Task::querySegmentExecutionTime() {
     SegmentLength_t res = 0;
@@ -141,7 +97,7 @@ SegmentLength_t Task::querySegmentExecutionTime() {
     return res;
 }
 
-bool Task::isTaskCompleted() {
+bool Task::isAllSegmentsCompleted() {
     for (Segment & seg : segments)
         if (!seg.isSegmentCompleted()) return false;
     return true;
@@ -158,12 +114,6 @@ bool Task::executeFirstReadySegment(TimeStamp_t timeStamp) {
     return false;
 }
 
-bool Task::createNewSegment(SegmentLength_t segmentLength) {
-    unsigned int segmentCount = segments.size();
-    segments.push_back(Segment(segmentLength, segmentCount, taskPreemption));
-    return true;
-}
-
 
 bool Task::_resetAllSegments() {
     for (Segment & seg : segments)
@@ -178,29 +128,21 @@ bool Task::isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalInd
     return false;
 }
 
-SegmentState_t Task::queryTaskState() {
-    SegmentState_t res = SegmentState_t::SEG_NOTREADY;
-    for (Segment & seg: segments)
-        if (seg.isSegmentReady()) return SegmentState_t::SEG_READY;
-    if (isTaskCompleted()) return SegmentState_t::SEG_FINISHED;
-    return res;
-}
-
 void Task::setSegmentDependency(SegmentIndex_t segment1, SegmentIndex_t segment2) {
     segments[segment2].addToDependency(segments[segment1]);
 }
 
 bool Task::setTaskScheduled() {
-    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::TASKS_EXECUTING);
+    setTaskState(TaskState_t::TASKS_EXECUTING);
     return true;
 }
 
 bool Task::setTaskPreempted() {
-    belongedHeterSSTask->setHeterSSTaskState(HeterSSTaskState_t::TASKS_READY);
+    setTaskState(TaskState_t::TASKS_READY);
     return true;
 }
 
-std::vector<Segment *> Task::getReadySegments() {
+std::vector<Segment *> & Task::getReadySegments() {
     readySegments.clear();
     for (Segment & seg : segments)
         if (seg.isSegmentReady()) readySegments.push_back(&seg);
@@ -208,14 +150,14 @@ std::vector<Segment *> Task::getReadySegments() {
 }
 
 void Segment::addToDependency(Segment & segment) {
-    dependentSegments.push_back(&segment);
-    segment.dependentedBySegments.push_back(this);
+    precedingSegments.push_back(&segment);
+    segment.succeedingSegments.push_back(this);
 }
 
 bool Segment::isSegmentReady() {
     if (isSegmentCompleted()) return false;
-    for (unsigned int i = 0; i < dependentSegments.size(); i++)
-        if (!dependentSegments[i]->isSegmentCompleted()) return false;
+    for (Segment * & seg: precedingSegments)
+        if (!seg->isSegmentCompleted()) return false;
     markSegmentReady();
     return true;
 }
@@ -236,7 +178,7 @@ bool Segment::executeSegment(TimeStamp_t timeStamp) {
     if (segmentRemainLength == 0) {
         segmentCompleted = true;
         segmentReady = false;
-        for (Segment * & seg : dependentedBySegments) {
+        for (Segment * & seg : succeedingSegments) {
             seg->markSegmentReady();
         }
     }
