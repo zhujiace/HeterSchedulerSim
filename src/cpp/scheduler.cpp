@@ -30,7 +30,7 @@ bool Scheduler::initializeSimulation() {
             input_file >> segments[j];
         }
         std::vector<ProcessorAffinity_t> processorTypes = {ProcessorAffinity_t::CPU, ProcessorAffinity_t::GPU};
-        HeterSSTask & tmp = simulator.createNewHeterSSTaskWithVector(processorTypes, segments);
+        Task & tmp = simulator.createNewHeterSSTaskWithVector(processorTypes, segments);
         tmp.setTaskRelativeDeadline(deadlines);
         tmp.setTaskPeriod(deadlines);
         tmp.setTaskRTPriority(99-i);
@@ -64,45 +64,33 @@ bool Scheduler::startScheduleLoop() {
 bool Scheduler::makeScheduleDecisions() {
     // Cureent Implementation: based on SCHED_FIFO
 
-    simulator.sortHeterSSTasksByPriority();
+    simulator.sortTasksByPriority();
 
-    for (HeterTaskIndex_t i = 0; i < simulator.queryHeterSSTaskCount(); i++) {
-        if (simulator.queryHeterSSTaskState(i)!=HeterSSTaskState_t::TASKS_READY)
-            continue;
-        Task & task = simulator.getHeterSSTask(i).getReadyTask();
-        Processor * availableProcessor = nullptr;
-        for (ProcessorIndex_t j = 0; j < simulator.queryProcessorCount(); j++) {
-            if (simulator.getProcessor(j).queryProcessorType()!=task.queryProcessorAffinity())
-                continue;
-            if (simulator.queryProcessorState(j)==ProcessorState_t::IDLE) {
-                availableProcessor = &(simulator.getProcessor(j));
-                break;
-            }
+    // First round: check IDLE Processors
+    for (ProcessorIndex_t j = 0; j < simulator.queryProcessorCount(); j++) {
+        Processor & proc = simulator.getProcessor(j);
+        if (proc.queryProcessorState()!=IDLE) continue;
+        for (TaskIndex_t i = 0; i < simulator.queryTaskCount(); i++) {
+            Segment * readySegmet = simulator.getTask(i).
+                                    getFirstReadySegment(proc.queryProcessorType());
+            if (!readySegmet) continue;
+            proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), readySegmet, simulator.queryCurrentTimeStamp());
+            // Otherwise, schedule here
         }
-
-        // No idle processors and the task is a preemptive task,
-        // Search for preemptive processor of this task
-        // Need to check the taskset priority
-        if (!availableProcessor && task.queryTaskPreemption()==TaskPreemption_t::PREEMPTIVE) {
-            for (ProcessorIndex_t j = 0; j < simulator.queryProcessorCount(); j++) {
-                if (simulator.getProcessor(j).queryProcessorType()!=task.queryProcessorAffinity())
-                    continue;
-                if (simulator.queryProcessorState(j)!=ProcessorState_t::BUSY_PREEMPTIVE)
-                    continue;
-                if (simulator.getProcessor(j).queryProcessorCurrentTaskPriority()
-                >= simulator.getHeterSSTask(i).queryTaskRTPriority())
-                    continue;
-                availableProcessor = &(simulator.getProcessor(j));
-                break;
-            }
-        }
-
-        if (availableProcessor) {
-            availableProcessor->scheduleTask(task, simulator.queryCurrentTimeStamp());
-        } else {
-            // No available processor, do nothing
-        }
-
     }
+    // Next round: check preemptive processors
+    for (ProcessorIndex_t j = 0; j < simulator.queryProcessorCount(); j++) {
+        Processor & proc = simulator.getProcessor(j);
+        if (proc.queryProcessorState()!=BUSY_PREEMPTIVE) continue;
+        for (TaskIndex_t i = 0; i < simulator.queryTaskCount(); i++) {
+            if (simulator.getTask(i).queryTaskRTPriority() <= 
+                proc.getCurrentTask().queryTaskRTPriority()) continue;
+            Segment * readySegmet = simulator.getTask(i).
+                                    getFirstReadySegment(proc.queryProcessorType());
+            if (!readySegmet) continue;
+            proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), readySegmet, simulator.queryCurrentTimeStamp());
+        }
+    }
+
     return true;
 }
