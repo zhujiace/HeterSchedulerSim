@@ -90,13 +90,6 @@ bool Task::checkWhetherMissDDL(TimeStamp_t currentTime) {
 }
 
 
-SegmentLength_t Task::querySegmentExecutionTime() {
-    SegmentLength_t res = 0;
-    for (Segment & seg : segments)
-        res += seg.querySegmentLength();
-    return res;
-}
-
 bool Task::isAllSegmentsCompleted() {
     for (Segment & seg : segments)
         if (!seg.isSegmentCompleted()) return false;
@@ -147,6 +140,15 @@ std::vector<Segment *> & Task::getReadySegments() {
     for (Segment & seg : segments)
         if (seg.isSegmentReady()) readySegments.push_back(&seg);
     return readySegments;
+}
+
+Segment * Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
+    getReadySegments();
+    for (Segment * & seg : readySegments)
+        if (seg->querySegmentProcessorAffinity()==processorAffinity)
+            if (!seg->getCurrentProcessor())
+                return seg;
+    return nullptr;
 }
 
 void Segment::addToDependency(Segment & segment) {

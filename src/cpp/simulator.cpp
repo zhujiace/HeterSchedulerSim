@@ -48,27 +48,27 @@ ProcessorState_t Simulator::queryProcessorState(ProcessorIndex_t processorGlobal
     return processors[processorGlobalIndex].queryProcessorState();
 }
 
-HeterSSTaskState_t Simulator::queryHeterSSTaskState(HeterTaskIndex_t heterTaskIndex) {
-    return heterSSTaskset[heterTaskIndex].queryHeterSSTaskState();
+TaskState_t Simulator::queryTaskState(TaskIndex_t taskIndex) {
+    return taskset[taskIndex].queryTaskState();
 }
 
-HeterSSTask & Simulator::createNewHeterSSTask() {
-    heterSSTaskset.push_back(HeterSSTask());
-    return heterSSTaskset.back();
+Task & Simulator::createNewTask() {
+    taskset.push_back(Task());
+    return taskset.back();
 }
 
-HeterSSTask & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType,
+Task & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType,
                                                         std::vector<unsigned int> segments) {
-    HeterSSTask & result = createNewHeterSSTask();
+    Task & result = createNewTask();
     result.initializeTaskByVector(processorType, segments);
     return result;
 }
 
 bool Simulator::checkTaskRelease() {
     if (taskReleaseCheckedThisRound) return true;
-    for (HeterSSTask & htask: heterSSTaskset) {
-        if (currentTimeStamp%htask.queryTaskPeriod()==0) {
-            if (!htask.releaseTask(currentTimeStamp))
+    for (Task & task: taskset) {
+        if (currentTimeStamp%task.queryTaskPeriod()==0) {
+            if (!task.releaseTask(currentTimeStamp))
                 return false;
         }
     }
@@ -84,8 +84,8 @@ void Simulator::updateProcessorAndTask() {
         }
     }
 
-    for (HeterSSTask & htask: heterSSTaskset) {
-        if (htask.checkWhetherMissDDL(currentTimeStamp))
+    for (Task & task: taskset) {
+        if (task.checkWhetherMissDDL(currentTimeStamp))
             taskMissDeadline = true;
     }
 
@@ -93,21 +93,17 @@ void Simulator::updateProcessorAndTask() {
     taskReleaseCheckedThisRound = false;
 }
 
-Task & Simulator::queryReadyTask(HeterTaskIndex_t heterTaskIndex) {
-    HeterSSTask & htask = heterSSTaskset[heterTaskIndex];
-    return htask.getReadyTask();
-}
 
 void Simulator::initializeStorages() {
-    heterSSTaskset.reserve(10);
+    taskset.reserve(10);
     processors.reserve(10);
 }
 
 void Simulator::printSimulatorStates() {
     std::cerr << "Current Timestamp: " << currentTimeStamp << std::endl;
     unsigned int count = 0;
-    for (HeterSSTask & htask : heterSSTaskset) {
-        std::cerr << "HTask " << count++ << " " << htask << std::endl;
+    for (Task & htask : taskset) {
+        std::cerr << "Task " << count++ << " " << htask << std::endl;
     }
     count = 0;
     for (Processor & processor: processors) {

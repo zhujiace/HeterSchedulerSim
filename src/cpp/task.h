@@ -29,13 +29,14 @@ typedef TaskPreemption_t SegmentPreemption_t;
 typedef unsigned int SegmentLength_t;
 typedef unsigned int SegmentIndex_t;
 
-typedef unsigned int HeterTaskIndex_t;
+typedef unsigned int TaskIndex_t;
 
 enum SegmentState_t {
+    SEG_EXECUTING,
     SEG_READY,
     SEG_NOTREADY,
     SEG_FINISHED,
-    UNKNWON
+    SEG_UNKNWON
 };
 
 enum SSTaskState_t {
@@ -46,8 +47,8 @@ enum SSTaskState_t {
 
 enum TaskState_t {
     TASKS_EXECUTING, // deprecated, tasks can be inter-parallel
-    TASKS_FINISHED,
     TASKS_READY,
+    TASKS_FINISHED,
     TASKS_MISSDDL,
     TASKS_UNKNOWN,
 };
@@ -140,7 +141,7 @@ public:
     bool resetSegment();
 
     void setCurrentProcessor(Processor * processor) {currentProcessor = processor;};
-    Processor & getCurrentProcessor() { return *currentProcessor;};
+    Processor * getCurrentProcessor() { return currentProcessor;};
 };
 
 /**
@@ -249,15 +250,15 @@ public:
     bool resetTask() {return _resetAllSegments();};
 
     // Default constructor: create an empty task
-    Task() {};
+    Task() {segments.reserve(20);};
     Task(TaskRTPriority_t taskPriority, TimeStamp_t taskPeriod):
     taskPriority(taskPriority), taskPeriod(taskPeriod), taskRealTimeProperty(HARDRT)
-    {};
+    {segments.reserve(20);};
 
     void setProcessorMasks(std::vector<unsigned int> & processorMasks)
         {this->processorMasks = processorMasks;};
     bool isProcessorMaskEnabled() {return processorMaskEnabled;};
-    bool isInsideProcessorMasks(unsigned int processorGlobalIndex) {return true;};
+    bool isInsideProcessorMasks(unsigned int processorGlobalIndex);
 
     TaskRTProperty_t queryTaskRTProperty() {return taskRealTimeProperty;};
 
@@ -271,9 +272,8 @@ public:
     */
     void setSegmentDependency(SegmentIndex_t seg1, SegmentIndex_t seg2);
     std::vector<Segment *> & getReadySegments();
-    std::vector<Segment *> & Task::queryReadySegments() {
-        return readySegments;
-    }
+    std::vector<Segment *> & queryReadySegments() {return readySegments;}
+    Segment * getFirstReadySegment(ProcessorAffinity_t processorAffinity);
     Segment & getSegment(SegmentIndex_t segmentIndex) {
         return segments[segmentIndex];
     }

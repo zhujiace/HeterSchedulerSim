@@ -45,6 +45,7 @@ typedef unsigned int ProcessorIndex_t;
 
 using namespace processor;
 
+class Segment;
 class Task;
 
 namespace task {
@@ -62,11 +63,13 @@ protected:
     ProcessorIndex_t processorInternalIndex = 0;
 
     Task * currentTask = nullptr;
+    Segment * currentSegment = nullptr;
 
     task::TaskRTPriority_t currentTaskPriority = 99;
 
 public:
     Task & getCurrentTask() {return *currentTask;};
+    Segment & getCurrentSegment() {return *currentSegment;};
 
     bool operator<(const Processor & other) const {
         return processorType < other.processorType;
@@ -93,6 +96,8 @@ public:
      * schedule is called.
     */
     bool scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp);
+
+    bool scheduleTaskSpecifiedSegment(Task & taskToSchedule, Segment * Segment, task::TimeStamp_t timeStamp);
 
     // Default constructor, create an empty processor.
     Processor() {};
