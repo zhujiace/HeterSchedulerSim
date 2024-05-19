@@ -38,7 +38,7 @@ bool Scheduler::initializeSimulation() {
     }
 
     // Step 2: Start simulation
-    simulator.setSimulationTimeBound(1000);
+    simulator.setSimulationTimeBound(1200);
     return true;
 }
 
@@ -75,7 +75,7 @@ bool Scheduler::makeScheduleDecisions() {
                                     getFirstReadySegment(proc.queryProcessorType());
             if (!readySegmet) continue;
             proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), readySegmet, simulator.queryCurrentTimeStamp());
-            // Otherwise, schedule here
+            break;
         }
     }
     // Next round: check preemptive processors
@@ -83,12 +83,13 @@ bool Scheduler::makeScheduleDecisions() {
         Processor & proc = simulator.getProcessor(j);
         if (proc.queryProcessorState()!=BUSY_PREEMPTIVE) continue;
         for (TaskIndex_t i = 0; i < simulator.queryTaskCount(); i++) {
-            if (simulator.getTask(i).queryTaskRTPriority() <= 
-                proc.getCurrentTask().queryTaskRTPriority()) continue;
-            Segment * readySegmet = simulator.getTask(i).
-                                    getFirstReadySegment(proc.queryProcessorType());
+            Task & task = simulator.getTask(i);
+            if (task.queryTaskRTPriority() <= 
+                proc.getCurrentTask()->queryTaskRTPriority()) continue;
+            Segment * readySegmet = task.getFirstReadySegment(proc.queryProcessorType());
             if (!readySegmet) continue;
             proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), readySegmet, simulator.queryCurrentTimeStamp());
+            break;
         }
     }
 

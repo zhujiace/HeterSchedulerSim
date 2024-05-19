@@ -94,7 +94,7 @@ class Segment {
     SegmentIndex_t segmentIndex = 0;
 
     ProcessorAffinity_t segmentAffinity;
-    Processor * currentProcessor;
+    Processor * currentProcessor = nullptr;
 
     // The segment can be executed if and only if all the precedent segments are finished.
     // The dependent segments may come from other tasks, set to nullptr if none.
@@ -117,7 +117,7 @@ public:
     */
     void addToDependency(Segment & segment);
 
-    SegmentLength_t querySegmentLength() {return segmentLength;};
+    SegmentLength_t querySegmentLength() const {return segmentLength;};
     SegmentLength_t querySegmentRemainLength() {return segmentRemainLength;};
     ProcessorAffinity_t querySegmentProcessorAffinity() {return segmentAffinity;}
     // may return false if the non-preemptive segment is not executed continuously
@@ -158,6 +158,8 @@ protected:
     ProcessorAffinity_t processorAffinity = CPU;
     TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
 
+    TaskIndex_t taskIndex;
+
     // TODO: Future feature, to support parallel execution of 
     // segments inside this task.
     bool ifParallel = false;
@@ -173,6 +175,7 @@ protected:
 
     // Runtime maintainance (storage)
     TaskState_t taskState = TaskState_t::TASKS_UNKNOWN;
+    SegmentLength_t executedLength = 0;
    
     bool processorMaskEnabled = false;
     std::vector<unsigned int> processorMasks = {};
@@ -201,6 +204,8 @@ public:
     void setTaskPeriod(TimeStamp_t taskPeriod) {this->taskPeriod = taskPeriod;};
     void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
     void setTaskRTPriority(TaskRTPriority_t priority) {this->taskPriority = priority;};
+    void setTaskIndex(TaskIndex_t index);
+    TaskIndex_t queryTaskIndex() {return taskIndex;}
 
     double queryTaskUtilization();
     double querySingleTaskUtilization(ProcessorAffinity_t processorAffinity);
@@ -209,6 +214,7 @@ public:
     
     TaskState_t checkTaskStates();
     TaskState_t queryTaskState() {return taskState;}
+    SegmentLength_t queryExecutedSegLength() {return executedLength;}
     void setTaskState(TaskState_t state) {taskState = state;}
     
     bool isAllSegmentsCompleted();
@@ -217,9 +223,13 @@ public:
     // true if miss
     bool checkWhetherMissDDL(TimeStamp_t currentTime);
 
+    unsigned int querySegmentCount() {return segments.size();};
+    SegmentLength_t querySegmentExecutionTime() const;
+
     // TODO: improve task status printing
     friend std::ostream & operator<<(std::ostream & os, const Task & task) {
-        os << std::string("State: ");
+        os << std::string("Task ") << std::to_string(task.taskIndex);
+        os << std::string(" state: ");
         switch (task.taskState) {
             case TASKS_EXECUTING:
                 os << std::string("executing");break;
@@ -232,11 +242,10 @@ public:
             default:
                 os << std::string("unknown");break;
         }
+        os << std::string(", Progress: ") << std::to_string(task.executedLength) 
+           << std::string("/") << std::to_string(task.querySegmentExecutionTime());
         return os;
     }
-
-    unsigned int querySegmentCount() {return segments.size();};
-    SegmentLength_t querySegmentExecutionTime();
 
     bool isSegmentReady(SegmentIndex_t segmentIndex) {return segments[segmentIndex].isSegmentReady();};
     /**

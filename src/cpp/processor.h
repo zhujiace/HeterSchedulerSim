@@ -68,15 +68,15 @@ protected:
     task::TaskRTPriority_t currentTaskPriority = 99;
 
 public:
-    Task & getCurrentTask() {return *currentTask;};
-    Segment & getCurrentSegment() {return *currentSegment;};
+    Task * getCurrentTask() const {return currentTask;};
+    Segment * getCurrentSegment() const {return currentSegment;};
 
     bool operator<(const Processor & other) const {
         return processorType < other.processorType;
     }
 
-    ProcessorType_t queryProcessorType() {return processorType;};
-    ProcessorState_t queryProcessorState() {return processorState;};
+    ProcessorType_t queryProcessorType() const {return processorType;};
+    ProcessorState_t queryProcessorState() const {return processorState;};
     ProcessorIndex_t queryProcessorGlobalIndex() {return processorGlobalIndex;};
 
     task::TaskRTPriority_t queryProcessorCurrentTaskPriority() {return currentTaskPriority;}
@@ -111,22 +111,6 @@ public:
     // Update the processor state if necessary
     bool workProcessor(task::TimeStamp_t timeStamp);
 
-    friend std::ostream & operator<<(std::ostream & os, const Processor & processor) {
-        os << std::string("State: ");
-        switch (processor.processorState) {
-            case IDLE:
-                os << std::string("idle");break;
-            case BUSY_PREEMPTIVE:
-                os << std::string("busy-preemptive");break;
-            case BUSY_NONPREEMPTIVE:
-                os << std::string("busy-nonpreemptive");break;
-            case DEAD:
-                os << std::string("dead");break;
-            default:
-                os << std::string("unknown");break;
-        }
-        return os;
-    }
 };
 
 #endif // processor.h

@@ -11,20 +11,26 @@ Copy Right. The EHPCL Authors.
 TaskState_t Task::checkTaskStates() {
     readySegments.clear();
     readySegments.reserve(segments.size());
-    TaskState_t res = TASKS_FINISHED;
+    TaskState_t res = TASKS_UNKNOWN;
+    
+    executedLength = 0;
     for (Segment & seg : segments) {
+        executedLength += seg.querySegmentLength() - seg.querySegmentRemainLength();
         if (!seg.isSegmentCompleted()) {
-            res = TASKS_UNKNOWN;
             if (seg.isSegmentReady()) {
                 res = TASKS_READY;
                 readySegments.push_back(&seg);
             }
         }
     }
-    if (res == TASKS_UNKNOWN) res = TASKS_FINISHED;
+    if (executedLength == querySegmentExecutionTime()) res = TASKS_FINISHED;
+    taskState = res;
     return res;
 }
 
+void Task::setTaskIndex(TaskIndex_t index) {
+    this->taskIndex = index;
+}
 
 Segment & Task::createNewSegment(ProcessorAffinity_t processorAffinity, SegmentLength_t segmentLength) {
     if (processorAffinity==CPU || processorAffinity==CPUBigCore || processorAffinity==CPULittleCore)
@@ -52,9 +58,9 @@ bool Task::initializeTaskByVector(std::vector<ProcessorAffinity_t> & processorTy
 }
 
 
-SegmentLength_t Task::querySegmentExecutionTime() {
+SegmentLength_t Task::querySegmentExecutionTime() const {
     SegmentLength_t totalSegmentLength = 0;
-    for (Segment & seg : segments)
+    for (auto seg : segments)
         totalSegmentLength += seg.querySegmentLength();
     return totalSegmentLength;
 }
@@ -168,6 +174,7 @@ bool Segment::resetSegment() {
     executedAt.clear();
     if (segmentRemainLength !=0) return false;
     segmentRemainLength = segmentLength;
+    currentProcessor = nullptr;
     return true;
 }
 

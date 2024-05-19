@@ -24,11 +24,11 @@ bool Processor::scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp)
 
 bool Processor::workProcessor(task::TimeStamp_t timeStamp) {
     if (processorState == IDLE) return true;
-    if (!currentTask->executeFirstReadySegment(timeStamp)) return false;
+    if (!currentSegment->executeSegment(timeStamp)) return false;
 
     // TODO: Add temporal records here
 
-    if (currentTask->getReadySegments().size()==0) {
+    if (currentSegment->querySegmentRemainLength()==0) {
         processorState = IDLE;
         currentTask = nullptr;
         currentSegment = nullptr;
@@ -43,7 +43,7 @@ bool Processor::scheduleTaskSpecifiedSegment(Task & taskToschedule, Segment * se
         // There's task going on processor
         if (processorPreemption!=ProcessorPreemption_t::PREEMPTIVE) return false;
         currentTask->setTaskPreempted();
-        
+        currentSegment->setCurrentProcessor(nullptr);
     }
 
     currentTask = &taskToschedule;

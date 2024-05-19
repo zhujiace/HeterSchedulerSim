@@ -54,6 +54,7 @@ TaskState_t Simulator::queryTaskState(TaskIndex_t taskIndex) {
 
 Task & Simulator::createNewTask() {
     taskset.push_back(Task());
+    taskset.back().setTaskIndex(taskset.size()-1);
     return taskset.back();
 }
 
@@ -85,6 +86,7 @@ void Simulator::updateProcessorAndTask() {
     }
 
     for (Task & task: taskset) {
+        task.checkTaskStates();
         if (task.checkWhetherMissDDL(currentTimeStamp))
             taskMissDeadline = true;
     }
@@ -99,11 +101,36 @@ void Simulator::initializeStorages() {
     processors.reserve(10);
 }
 
+static std::ostream & operator<<(std::ostream & os, const Processor & processor) {
+    os << std::string("State: ");
+    switch (processor.queryProcessorState()) {
+        case IDLE:
+            os << std::string("idle");break;
+        case BUSY_PREEMPTIVE:
+            os << std::string("busy-preemptive");break;
+        case BUSY_NONPREEMPTIVE:
+            os << std::string("busy-nonpreemptive");break;
+        case DEAD:
+            os << std::string("dead");break;
+        default:
+            os << std::string("unknown");break;
+    }
+    os << std::string(", Task ");
+    if (processor.getCurrentTask())
+    os << std::to_string(processor.getCurrentTask()->queryTaskIndex());
+    os << std::string(", Segment: ");
+    if (processor.getCurrentSegment())
+    os << std::to_string(processor.getCurrentSegment()->querySegmentLength() - processor.getCurrentSegment()->querySegmentRemainLength())
+       << std::string("/") << std::to_string(processor.getCurrentSegment()->querySegmentLength());
+    return os;
+}
+
+
 void Simulator::printSimulatorStates() {
     std::cerr << "Current Timestamp: " << currentTimeStamp << std::endl;
     unsigned int count = 0;
-    for (Task & htask : taskset) {
-        std::cerr << "Task " << count++ << " " << htask << std::endl;
+    for (Task & task : taskset) {
+        std::cerr <<  task << std::endl;
     }
     count = 0;
     for (Processor & processor: processors) {
