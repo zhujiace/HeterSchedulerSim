@@ -71,10 +71,10 @@ bool Scheduler::makeScheduleDecisions() {
         Processor & proc = simulator.getProcessor(j);
         if (proc.queryProcessorState()!=IDLE) continue;
         for (TaskIndex_t i = 0; i < simulator.queryTaskCount(); i++) {
-            Segment * readySegmet = simulator.getTask(i).
+            Segment & readySegmet = simulator.getTask(i).
                                     getFirstReadySegment(proc.queryProcessorType());
-            if (!readySegmet) continue;
-            proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), readySegmet, simulator.queryCurrentTimeStamp());
+            if (!readySegmet.isSegmentMarkedReady()) continue;
+            proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), &readySegmet, simulator.queryCurrentTimeStamp());
             break;
         }
     }
@@ -86,9 +86,9 @@ bool Scheduler::makeScheduleDecisions() {
             Task & task = simulator.getTask(i);
             if (task.queryTaskRTPriority() <= 
                 proc.getCurrentTask()->queryTaskRTPriority()) continue;
-            Segment * readySegmet = task.getFirstReadySegment(proc.queryProcessorType());
-            if (!readySegmet) continue;
-            proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), readySegmet, simulator.queryCurrentTimeStamp());
+            Segment & readySegmet = task.getFirstReadySegment(proc.queryProcessorType());
+            if (!readySegmet.isSegmentMarkedReady()) continue;
+            proc.scheduleTaskSpecifiedSegment(simulator.getTask(i), &readySegmet, simulator.queryCurrentTimeStamp());
             break;
         }
     }

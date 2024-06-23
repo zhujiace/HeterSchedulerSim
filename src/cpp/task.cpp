@@ -4,9 +4,18 @@ Copy Right. The EHPCL Authors.
 
 #include "task.h"
 
+bool Task::isSegmentReady(SegmentIndex_t segment) {
+    if (segments[segment].isSegmentMarkedReady()) return true;
+    for (SegmentIndex_t & segInd: precedingSegments[segment]) {
+        if (!segments[segInd].isSegmentCompleted()) return false;
+    }
+    segments[segment].markSegmentReady();
+    return true;
+}
+
 /**
  * @brief check the task state and update internal storage.
- * @attention different from querying, will detail exam each segments
+ * @attention different from querying, will detail examine each segments
 */
 TaskState_t Task::checkTaskStates() {
     readySegments.clear();
@@ -14,12 +23,12 @@ TaskState_t Task::checkTaskStates() {
     TaskState_t res = TASKS_UNKNOWN;
     
     executedLength = 0;
-    for (Segment & seg : segments) {
-        executedLength += seg.querySegmentLength() - seg.querySegmentRemainLength();
-        if (!seg.isSegmentCompleted()) {
-            if (seg.isSegmentReady()) {
+    for (SegmentIndex_t i = 0; i < segments.size(); i++) {
+        executedLength += segments[i].querySegmentLength() - segments[i].querySegmentRemainLength();
+        if (!segments[i].isSegmentCompleted()) {
+            if (isSegmentReady(i)) {
                 res = TASKS_READY;
-                readySegments.push_back(&seg);
+                readySegments.push_back(i);
             }
         }
     }
@@ -48,11 +57,11 @@ bool Task::initializeTaskByVector(std::vector<ProcessorAffinity_t> & processorTy
     // Insert segments into the tasks
     // Configure the dependencies
     unsigned int processorTypeCount = processorType.size();
-    for (unsigned int i = 0; i < segments.size(); i++) {
+    for (SegmentIndex_t i = 0; i < segments.size(); i++) {
         unsigned int processorTypeIndex = i%processorTypeCount;
         ProcessorAffinity_t type = processorType[processorTypeIndex];
         createNewSegment(type, segments[i]);
-        if (i!=0) this->segments[i].addToDependency(this->segments[i-1]);
+        if (i!=0) setSegmentDependency(i-1, i);
     }
     return true;
 }
@@ -103,13 +112,21 @@ bool Task::isAllSegmentsCompleted() {
 }
 
 bool Task::executeSegment(SegmentIndex_t segmentIndex, TimeStamp_t timeStamp) {
-    return segments[segmentIndex].executeSegment(timeStamp);
+    bool res = segments[segmentIndex].executeSegment(timeStamp);
+    if (!res) return false;
+    if (segments[segmentIndex].isSegmentCompleted()) {
+        for (SegmentIndex_t & segInd: successiveSegments[segmentIndex]) {
+            segments[segInd].markSegmentReady();
+        }
+        segments[segmentIndex].setCurrentProcessorIndex(999999);
+    }
+    return res;
 }
 
 bool Task::executeFirstReadySegment(TimeStamp_t timeStamp) {
-    for (Segment & seg : segments)
-        if (seg.isSegmentReady())
-            return seg.executeSegment(timeStamp);
+    for (SegmentIndex_t i = 0; i < segments.size(); i++)
+        if (isSegmentReady(i))
+            return segments[i].executeSegment(timeStamp);
     return false;
 }
 
@@ -128,7 +145,14 @@ bool Task::isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalInd
 }
 
 void Task::setSegmentDependency(SegmentIndex_t segment1, SegmentIndex_t segment2) {
-    segments[segment2].addToDependency(segments[segment1]);
+    if (precedingSegments.size()==0) {
+        precedingSegments.resize(this->segments.size());
+        successiveSegments.resize(this->segments.size());
+        for (auto & seg: precedingSegments) seg.clear();
+        for (auto & seg: successiveSegments) seg.clear();
+    }
+    precedingSegments[segment2].push_front(segment1);
+    successiveSegments[segment1].push_front(segment2);
 }
 
 bool Task::setTaskScheduled() {
@@ -141,55 +165,19 @@ bool Task::setTaskPreempted() {
     return true;
 }
 
-std::vector<Segment *> & Task::getReadySegments() {
+std::vector<SegmentIndex_t> & Task::getReadySegments() {
     readySegments.clear();
-    for (Segment & seg : segments)
-        if (seg.isSegmentReady()) readySegments.push_back(&seg);
+    for (SegmentIndex_t i = 0; i < segments.size(); i++)
+        if (isSegmentReady(i)) readySegments.push_back(i);
     return readySegments;
 }
 
-Segment * Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
+Segment & Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
     getReadySegments();
-    for (Segment * & seg : readySegments)
-        if (seg->querySegmentProcessorAffinity()==processorAffinity)
-            if (!seg->getCurrentProcessor())
-                return seg;
-    return nullptr;
+    for (SegmentIndex_t & i : readySegments)
+        if (segments[i].querySegmentProcessorAffinity()==processorAffinity)
+            if (segments[i].getCurrentProcessorIndex() == 999999)
+                return segments[i];
+    return segments[0];
 }
 
-void Segment::addToDependency(Segment & segment) {
-    precedingSegments.push_back(&segment);
-    segment.succeedingSegments.push_back(this);
-}
-
-bool Segment::isSegmentReady() {
-    if (isSegmentCompleted()) return false;
-    for (Segment * & seg: precedingSegments)
-        if (!seg->isSegmentCompleted()) return false;
-    markSegmentReady();
-    return true;
-}
-
-bool Segment::resetSegment() {
-    executedAt.clear();
-    if (segmentRemainLength !=0) return false;
-    segmentRemainLength = segmentLength;
-    currentProcessor = nullptr;
-    return true;
-}
-
-bool Segment::executeSegment(TimeStamp_t timeStamp) {
-    if (segmentRemainLength<=0) return false;
-    if (segmentPreemption==SegmentPreemption_t::NONPREEMPTIVE)
-    if (!executedAt.empty() && executedAt.back()+1!=timeStamp) return false;
-    segmentRemainLength--;
-    executedAt.push_back(timeStamp);
-    if (segmentRemainLength == 0) {
-        segmentCompleted = true;
-        segmentReady = false;
-        for (Segment * & seg : succeedingSegments) {
-            seg->markSegmentReady();
-        }
-    }
-    return true;
-}

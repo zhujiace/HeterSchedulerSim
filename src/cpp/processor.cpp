@@ -11,11 +11,11 @@ bool Processor::scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp)
         // There's task going on the processor.
         // Check whether both processor and task support preemption
         if (processorPreemption!=ProcessorPreemption_t::PREEMPTIVE) return false;
-        currentTask->setTaskPreempted();
+        // currentTask->setTaskPreempted();
     }
 
     currentTask = &(taskToSchedule);
-    taskToSchedule.setTaskScheduled();
+    // taskToSchedule.setTaskScheduled();
     processorState = BUSY_NONPREEMPTIVE;
     if (processorPreemption==ProcessorPreemption_t::PREEMPTIVE)
         processorState = BUSY_PREEMPTIVE;
@@ -43,13 +43,13 @@ bool Processor::scheduleTaskSpecifiedSegment(Task & taskToschedule, Segment * se
         // There's task going on processor
         if (processorPreemption!=ProcessorPreemption_t::PREEMPTIVE) return false;
         currentTask->setTaskPreempted();
-        currentSegment->setCurrentProcessor(nullptr);
+        currentSegment->setCurrentProcessorIndex(999999);
     }
 
     currentTask = &taskToschedule;
     currentSegment = segment;
     taskToschedule.setTaskScheduled();
-    segment->setCurrentProcessor(this);
+    segment->setCurrentProcessorIndex(this->processorGlobalIndex);
     processorState = BUSY_NONPREEMPTIVE;
     if (processorPreemption==ProcessorPreemption_t::PREEMPTIVE)
         processorState = BUSY_PREEMPTIVE;

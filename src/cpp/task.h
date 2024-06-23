@@ -6,8 +6,9 @@ Copy Right. The EHPCL Authors.
 #define TASK_H
 
 #include <vector>
-#include <queue>
+#include <forward_list>
 
+#include "segment.h"
 #include "affinity.h"
 #include "processor.h"
 
@@ -25,19 +26,7 @@ enum TaskRTProperty_t {
     NONERT, // Current simulator does not support none RT Task.
 };
 
-typedef TaskPreemption_t SegmentPreemption_t;
-typedef unsigned int SegmentLength_t;
-typedef unsigned int SegmentIndex_t;
-
 typedef unsigned int TaskIndex_t;
-
-enum SegmentState_t {
-    SEG_EXECUTING,
-    SEG_READY,
-    SEG_NOTREADY,
-    SEG_FINISHED,
-    SEG_UNKNWON
-};
 
 enum SSTaskState_t {
     SS_EXECUTING,
@@ -84,67 +73,6 @@ using namespace task;
 class Processor;
 
 /**
- * @brief Describe a segment (SS Task Model) or node (DAG Task Model). 
-*/
-class Segment {
-    SegmentPreemption_t segmentPreemption = SegmentPreemption_t::PREEMPTIVE;
-    SegmentLength_t segmentLength = 0;
-    SegmentLength_t segmentRemainLength = 0;
-    // The segment index inside its task.
-    SegmentIndex_t segmentIndex = 0;
-
-    ProcessorAffinity_t segmentAffinity;
-    Processor * currentProcessor = nullptr;
-
-    // The segment can be executed if and only if all the precedent segments are finished.
-    // The dependent segments may come from other tasks, set to nullptr if none.
-    std::vector<Segment *> precedingSegments;
-    std::vector<Segment *> succeedingSegments;
-
-    std::vector<TimeStamp_t> executedAt = {};
-
-    // Local storage to speed up the system.
-    // Set to true if the corresponding methods return true.
-    bool segmentCompleted = false;
-    bool segmentReady = false;
-public:
-    bool isSegmentCompleted() {return segmentRemainLength==0;};
-    void markSegmentReady() {segmentReady = true;};
-    bool isSegmentReady();
-    /**
-     * @brief Add the given segment to the precedingSegments
-     * @param segment reference to the prec segment
-    */
-    void addToDependency(Segment & segment);
-
-    SegmentLength_t querySegmentLength() const {return segmentLength;};
-    SegmentLength_t querySegmentRemainLength() {return segmentRemainLength;};
-    ProcessorAffinity_t querySegmentProcessorAffinity() {return segmentAffinity;}
-    // may return false if the non-preemptive segment is not executed continuously
-    bool executeSegment(TimeStamp_t timeStamp);
-
-    // Default constructor: create an empty segment
-    Segment() {};
-    Segment(SegmentLength_t segmentLength, ProcessorAffinity_t processorAffinity):
-            segmentLength(segmentLength), segmentAffinity(processorAffinity)
-            {};
-    Segment(SegmentLength_t segmentLength, ProcessorAffinity_t processorAffinity, 
-            SegmentPreemption_t SegmentPreemption):
-            segmentLength(segmentLength), segmentAffinity(processorAffinity),
-            segmentPreemption(segmentPreemption) {};
-    
-    /**
-     * @brief Task may be period, the segment is reinited and executed again.
-     * @return True if reseted successfully, False if the reset behavior is inproper,
-     * e.g. reset before the segment has finished.
-    */
-    bool resetSegment();
-
-    void setCurrentProcessor(Processor * processor) {currentProcessor = processor;};
-    Processor * getCurrentProcessor() { return currentProcessor;};
-};
-
-/**
  * @brief Class on task, can inherit to SSTask or DAGTask.
 */
 class Task {
@@ -153,16 +81,13 @@ protected:
 
     // Internal storage, the instances of segments
     std::vector<Segment> segments = {};
+    std::vector<std::forward_list<SegmentIndex_t>> precedingSegments = {};
+    std::vector<std::forward_list<SegmentIndex_t>> successiveSegments = {};
 
     // Internal fixed properties
-    ProcessorAffinity_t processorAffinity = CPU;
+    SegmentLength_t segmentExecutionTime = 0;
     TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
-
     TaskIndex_t taskIndex;
-
-    // TODO: Future feature, to support parallel execution of 
-    // segments inside this task.
-    bool ifParallel = false;
 
     // Scheduling related properties
     TimeStamp_t taskRelativeDeadline = 0;
@@ -183,7 +108,7 @@ protected:
     bool taskCompleted = false;
 
     std::vector<SegmentState_t> segmentStates;
-    std::vector<Segment *> readySegments = {};
+    std::vector<SegmentIndex_t> readySegments = {};
 
 public:
 
@@ -204,6 +129,7 @@ public:
     void setTaskPeriod(TimeStamp_t taskPeriod) {this->taskPeriod = taskPeriod;};
     void setTaskRelativeDeadline(TimeStamp_t deadline) {this->taskRelativeDeadline = deadline;};
     void setTaskRTPriority(TaskRTPriority_t priority) {this->taskPriority = priority;};
+
     void setTaskIndex(TaskIndex_t index);
     TaskIndex_t queryTaskIndex() {return taskIndex;}
 
@@ -247,7 +173,7 @@ public:
         return os;
     }
 
-    bool isSegmentReady(SegmentIndex_t segmentIndex) {return segments[segmentIndex].isSegmentReady();};
+    bool isSegmentReady(SegmentIndex_t segmentIndex);
     /**
      * @brief Execute the given segment by 1 unit, need to take the preemption into account.
      * @return True if segment is succuessfully executed, otherwise false.
@@ -259,10 +185,10 @@ public:
     bool resetTask() {return _resetAllSegments();};
 
     // Default constructor: create an empty task
-    Task() {segments.reserve(20);};
+    Task() {segments.reserve(10);};
     Task(TaskRTPriority_t taskPriority, TimeStamp_t taskPeriod):
     taskPriority(taskPriority), taskPeriod(taskPeriod), taskRealTimeProperty(HARDRT)
-    {segments.reserve(20);};
+    {segments.reserve(10);};
 
     void setProcessorMasks(std::vector<unsigned int> & processorMasks)
         {this->processorMasks = processorMasks;};
@@ -280,12 +206,10 @@ public:
      * @brief Configure dependency: seg2 depends on seg1
     */
     void setSegmentDependency(SegmentIndex_t seg1, SegmentIndex_t seg2);
-    std::vector<Segment *> & getReadySegments();
-    std::vector<Segment *> & queryReadySegments() {return readySegments;}
-    Segment * getFirstReadySegment(ProcessorAffinity_t processorAffinity);
-    Segment & getSegment(SegmentIndex_t segmentIndex) {
-        return segments[segmentIndex];
-    }
+    std::vector<SegmentIndex_t> & getReadySegments();
+    std::vector<SegmentIndex_t> & queryReadySegments() {return readySegments;}
+    Segment & getFirstReadySegment(ProcessorAffinity_t processorAffinity);
+    Segment & getSegment(SegmentIndex_t segmentIndex) {return segments[segmentIndex];}
 };
 
 class SSTask : public Task {
