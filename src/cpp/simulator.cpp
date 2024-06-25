@@ -48,27 +48,28 @@ ProcessorState_t Simulator::queryProcessorState(ProcessorIndex_t processorGlobal
     return processors[processorGlobalIndex].queryProcessorState();
 }
 
-HeterSSTaskState_t Simulator::queryHeterSSTaskState(HeterTaskIndex_t heterTaskIndex) {
-    return heterSSTaskset[heterTaskIndex].queryHeterSSTaskState();
+TaskState_t Simulator::queryTaskState(TaskIndex_t taskIndex) {
+    return taskset[taskIndex].queryTaskState();
 }
 
-HeterSSTask & Simulator::createNewHeterSSTask() {
-    heterSSTaskset.push_back(HeterSSTask());
-    return heterSSTaskset.back();
+Task & Simulator::createNewTask() {
+    taskset.push_back(Task());
+    taskset.back().setTaskIndex(taskset.size()-1);
+    return taskset.back();
 }
 
-HeterSSTask & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType,
+Task & Simulator::createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType,
                                                         std::vector<unsigned int> segments) {
-    HeterSSTask & result = createNewHeterSSTask();
+    Task & result = createNewTask();
     result.initializeTaskByVector(processorType, segments);
     return result;
 }
 
 bool Simulator::checkTaskRelease() {
     if (taskReleaseCheckedThisRound) return true;
-    for (HeterSSTask & htask: heterSSTaskset) {
-        if (currentTimeStamp%htask.queryTaskPeriod()==0) {
-            if (!htask.releaseTask(currentTimeStamp))
+    for (Task & task: taskset) {
+        if (currentTimeStamp%task.queryTaskPeriod()==0) {
+            if (!task.releaseTask(currentTimeStamp))
                 return false;
         }
     }
@@ -80,12 +81,13 @@ void Simulator::updateProcessorAndTask() {
 
     for (Processor & processor: processors) {
         if (!processor.workProcessor(currentTimeStamp)) {
-            std::cout << "Processor working error!";
+            std::cerr << "Processor " << processor.queryProcessorGlobalIndex() << " working error!\n";
         }
     }
 
-    for (HeterSSTask & htask: heterSSTaskset) {
-        if (htask.checkWhetherMissDDL(currentTimeStamp))
+    for (Task & task: taskset) {
+        task.checkTaskStates();
+        if (task.checkWhetherMissDDL(currentTimeStamp))
             taskMissDeadline = true;
     }
 
@@ -93,25 +95,47 @@ void Simulator::updateProcessorAndTask() {
     taskReleaseCheckedThisRound = false;
 }
 
-Task & Simulator::queryReadyTask(HeterTaskIndex_t heterTaskIndex) {
-    HeterSSTask & htask = heterSSTaskset[heterTaskIndex];
-    return htask.getReadyTask();
-}
 
 void Simulator::initializeStorages() {
-    heterSSTaskset.reserve(10);
+    taskset.reserve(10);
     processors.reserve(10);
 }
+
+static std::ostream & operator<<(std::ostream & os, const Processor & processor) {
+    os << std::string("State: ");
+    switch (processor.queryProcessorState()) {
+        case IDLE:
+            os << std::string("idle");break;
+        case BUSY_PREEMPTIVE:
+            os << std::string("busy-preemptive");break;
+        case BUSY_NONPREEMPTIVE:
+            os << std::string("busy-nonpreemptive");break;
+        case DEAD:
+            os << std::string("dead");break;
+        default:
+            os << std::string("unknown");break;
+    }
+    os << std::string(", Task ");
+    if (processor.getCurrentTask())
+    os << std::to_string(processor.getCurrentTask()->queryTaskIndex());
+    os << std::string(", Segment: ");
+    if (processor.getCurrentSegment())
+    os << std::to_string(processor.getCurrentSegment()->querySegmentLength() - processor.getCurrentSegment()->querySegmentRemainLength())
+       << std::string("/") << std::to_string(processor.getCurrentSegment()->querySegmentLength());
+    return os;
+}
+
 
 void Simulator::printSimulatorStates() {
     std::cerr << "Current Timestamp: " << currentTimeStamp << std::endl;
     unsigned int count = 0;
-    for (HeterSSTask & htask : heterSSTaskset) {
-        std::cerr << "HTask " << count++ << " " << htask << std::endl;
+    for (Task & task : taskset) {
+        std::cerr <<  task << std::endl;
     }
     count = 0;
     for (Processor & processor: processors) {
-        std::cerr << "Processor " << count++ << " " << processor << std::endl;
+        std::cerr << processor.queryProcessorTypeName();
+        std::cerr << count++ << " " << processor << std::endl;
     }
     std::cerr << std::endl;
 }

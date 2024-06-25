@@ -20,7 +20,7 @@ class Simulator {
 
     std::vector<Processor> processors = {};
 
-    std::vector<HeterSSTask> heterSSTaskset = {};
+    std::vector<Task> taskset = {};
 
     TimeStamp_t currentTimeStamp = 0;
 
@@ -50,22 +50,20 @@ public:
      * without initilize the dependencies.
      * @return The handle of the empty task.
     */
-    HeterSSTask & createNewHeterSSTask();
-    HeterSSTask & createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType, std::vector<unsigned int> segments);
+    Task & createNewTask();
+    Task & createNewHeterSSTaskWithVector(std::vector<ProcessorAffinity_t> processorType, std::vector<unsigned int> segments);
     
     unsigned int queryProcessorCount() {return processors.size();}
-    unsigned int queryHeterSSTaskCount() {return heterSSTaskset.size();}
+    unsigned int queryTaskCount() {return taskset.size();}
 
     ProcessorState_t queryProcessorState(ProcessorIndex_t processorGlobalIndex);
-    HeterSSTaskState_t queryHeterSSTaskState(HeterTaskIndex_t heterTaskIndex);
-
-    Task & queryReadyTask(HeterTaskIndex_t heterTaskIndex);
-    void sortHeterSSTasksByPriority() {/*TODOO*/};
+    TaskState_t queryTaskState(TaskIndex_t taskIndex);
+    
+    void sortTasksByPriority() {/*TODOO*/};
 
     Processor & getProcessor(ProcessorIndex_t processorGlobalIndex) 
         {return processors[processorGlobalIndex];};
-    HeterSSTask & getHeterSSTask(HeterTaskIndex_t heterTaskIndex)
-        {return heterSSTaskset[heterTaskIndex];};
+    Task & getTask(TaskIndex_t taskIndex) {return taskset[taskIndex];};
 
 
     TimeStamp_t queryCurrentTimeStamp() {return currentTimeStamp;};

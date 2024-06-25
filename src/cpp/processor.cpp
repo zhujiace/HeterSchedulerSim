@@ -11,30 +11,47 @@ bool Processor::scheduleTask(Task & taskToSchedule, task::TimeStamp_t timeStamp)
         // There's task going on the processor.
         // Check whether both processor and task support preemption
         if (processorPreemption!=ProcessorPreemption_t::PREEMPTIVE) return false;
-        if (currentTask->queryTaskPreemption()!=TaskPreemption_t::PREEMPTIVE) return false;
-        currentTask->setTaskPreempted();
+        // currentTask->setTaskPreempted();
     }
 
     currentTask = &(taskToSchedule);
-    currentTaskPriority = currentTask->getBelongHeterSSTaskset()->queryTaskRTPriority();
-    taskToSchedule.setTaskScheduled();
+    // taskToSchedule.setTaskScheduled();
     processorState = BUSY_NONPREEMPTIVE;
     if (processorPreemption==ProcessorPreemption_t::PREEMPTIVE)
-        if (currentTask->queryTaskPreemption()==TaskPreemption_t::PREEMPTIVE)
-            processorState = BUSY_PREEMPTIVE;
+        processorState = BUSY_PREEMPTIVE;
     return true;
 }
 
 bool Processor::workProcessor(task::TimeStamp_t timeStamp) {
     if (processorState == IDLE) return true;
-    if (!currentTask->executeFirstReadySegment(timeStamp)) return false;
+    if (!currentSegment->executeSegment(timeStamp)) return false;
 
     // TODO: Add temporal records here
 
-    if (currentTask->getReadySegments().size()==0) {
-        currentTask->getBelongHeterSSTaskset()->checkHeterSSTaskFinishOrReady();
+    if (currentSegment->querySegmentRemainLength()==0) {
         processorState = IDLE;
         currentTask = nullptr;
+        currentSegment = nullptr;
     }
+    return true;
+}
+
+bool Processor::scheduleTaskSpecifiedSegment(Task & taskToschedule, Segment * segment,
+                                            task::TimeStamp_t currentTime) {
+    if (currentSegment == segment) return true;
+    if (currentSegment) {
+        // There's task going on processor
+        if (processorPreemption!=ProcessorPreemption_t::PREEMPTIVE) return false;
+        currentTask->setTaskPreempted();
+        currentSegment->setCurrentProcessorIndex(999999);
+    }
+
+    currentTask = &taskToschedule;
+    currentSegment = segment;
+    taskToschedule.setTaskScheduled();
+    segment->setCurrentProcessorIndex(this->processorGlobalIndex);
+    processorState = BUSY_NONPREEMPTIVE;
+    if (processorPreemption==ProcessorPreemption_t::PREEMPTIVE)
+        processorState = BUSY_PREEMPTIVE;
     return true;
 }
