@@ -9,7 +9,7 @@ bool Segment::resetSegment() {
     executedAt.clear();
     if (segmentRemainLength !=0) return false;
     segmentRemainLength = segmentLength;
-    currentProcessor = 99999;
+    currentProcessor = 999999;
     return true;
 }
 

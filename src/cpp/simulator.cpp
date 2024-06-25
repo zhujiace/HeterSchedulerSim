@@ -81,7 +81,7 @@ void Simulator::updateProcessorAndTask() {
 
     for (Processor & processor: processors) {
         if (!processor.workProcessor(currentTimeStamp)) {
-            std::cout << "Processor working error!";
+            std::cerr << "Processor " << processor.queryProcessorGlobalIndex() << " working error!\n";
         }
     }
 
@@ -134,7 +134,8 @@ void Simulator::printSimulatorStates() {
     }
     count = 0;
     for (Processor & processor: processors) {
-        std::cerr << "Processor " << count++ << " " << processor << std::endl;
+        std::cerr << processor.queryProcessorTypeName();
+        std::cerr << count++ << " " << processor << std::endl;
     }
     std::cerr << std::endl;
 }

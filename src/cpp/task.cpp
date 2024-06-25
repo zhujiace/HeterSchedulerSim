@@ -146,8 +146,8 @@ bool Task::isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalInd
 
 void Task::setSegmentDependency(SegmentIndex_t segment1, SegmentIndex_t segment2) {
     if (precedingSegments.size()==0) {
-        precedingSegments.resize(this->segments.size());
-        successiveSegments.resize(this->segments.size());
+        precedingSegments.resize(10);
+        successiveSegments.resize(10);
         for (auto & seg: precedingSegments) seg.clear();
         for (auto & seg: successiveSegments) seg.clear();
     }
@@ -168,16 +168,16 @@ bool Task::setTaskPreempted() {
 std::vector<SegmentIndex_t> & Task::getReadySegments() {
     readySegments.clear();
     for (SegmentIndex_t i = 0; i < segments.size(); i++)
-        if (isSegmentReady(i)) readySegments.push_back(i);
+        if (segments[i].querySegmentRemainLength()!=0 && isSegmentReady(i)) readySegments.push_back(i);
     return readySegments;
 }
 
-Segment & Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
+Segment * Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
     getReadySegments();
     for (SegmentIndex_t & i : readySegments)
         if (segments[i].querySegmentProcessorAffinity()==processorAffinity)
             if (segments[i].getCurrentProcessorIndex() == 999999)
-                return segments[i];
-    return segments[0];
+                return &(segments[i]);
+    return nullptr;
 }
 

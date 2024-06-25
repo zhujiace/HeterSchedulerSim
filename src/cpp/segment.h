@@ -71,7 +71,7 @@ public:
             segmentLength(segmentLength), segmentAffinity(processorAffinity)
             {};
     Segment(SegmentLength_t segmentLength, ProcessorAffinity_t processorAffinity, 
-            SegmentPreemption_t SegmentPreemption):
+            SegmentPreemption_t segmentPreemption):
             segmentLength(segmentLength), segmentAffinity(processorAffinity),
             segmentPreemption(segmentPreemption) {};
     

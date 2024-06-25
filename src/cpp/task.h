@@ -208,7 +208,7 @@ public:
     void setSegmentDependency(SegmentIndex_t seg1, SegmentIndex_t seg2);
     std::vector<SegmentIndex_t> & getReadySegments();
     std::vector<SegmentIndex_t> & queryReadySegments() {return readySegments;}
-    Segment & getFirstReadySegment(ProcessorAffinity_t processorAffinity);
+    Segment * getFirstReadySegment(ProcessorAffinity_t processorAffinity);
     Segment & getSegment(SegmentIndex_t segmentIndex) {return segments[segmentIndex];}
 };
 
