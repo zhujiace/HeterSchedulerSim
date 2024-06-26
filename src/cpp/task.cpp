@@ -145,12 +145,6 @@ bool Task::isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalInd
 }
 
 void Task::setSegmentDependency(SegmentIndex_t segment1, SegmentIndex_t segment2) {
-    if (precedingSegments.size()==0) {
-        precedingSegments.resize(10);
-        successiveSegments.resize(10);
-        for (auto & seg: precedingSegments) seg.clear();
-        for (auto & seg: successiveSegments) seg.clear();
-    }
     precedingSegments[segment2].push_front(segment1);
     successiveSegments[segment1].push_front(segment2);
 }
@@ -181,3 +175,9 @@ Segment * Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
     return nullptr;
 }
 
+void Task::initStorage() {
+    precedingSegments.resize(10);
+    successiveSegments.resize(10);
+    for (auto & seg: precedingSegments) seg.clear();
+    for (auto & seg: successiveSegments) seg.clear();
+}

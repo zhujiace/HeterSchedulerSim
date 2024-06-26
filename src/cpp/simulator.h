@@ -24,7 +24,7 @@ class Simulator {
 
     TimeStamp_t currentTimeStamp = 0;
 
-    TimeStamp_t maximumSimulationTime = 2147483647L;
+    TimeStamp_t maximumSimulationTime = 65536L;
 
     bool taskMissDeadline = false;
 

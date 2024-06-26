@@ -54,6 +54,7 @@ TaskState_t Simulator::queryTaskState(TaskIndex_t taskIndex) {
 
 Task & Simulator::createNewTask() {
     taskset.push_back(Task());
+    taskset.back().initStorage();
     taskset.back().setTaskIndex(taskset.size()-1);
     return taskset.back();
 }
