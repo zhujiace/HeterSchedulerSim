@@ -10,7 +10,7 @@ class SimulatorClient:
             [executable_path],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=None,
             text=True
         )
 
@@ -24,6 +24,12 @@ class SimulatorClient:
     
     def quit(self):
         return self.send_command("quit   ")
+    
+    def set_simulation_timebound(self, bound:int):
+        return self.send_command(f"setSimulationTimeBound {bound}")
+    
+    def is_simulation_completed(self) -> bool:
+        return bool(self.send_command("isSimulationCompleted"))
 
     def close(self):
         self.process.stdin.close()
@@ -34,8 +40,7 @@ class SimulatorClient:
 if __name__ == "__main__":
     simulator = SimulatorClient("/home/hamster/HeterSchedulerSim/build/main")
     print(simulator.get_current_time_stamp())
-    print(simulator.get_current_time_stamp())
-    print(simulator.get_current_time_stamp())
-    print(simulator.get_current_time_stamp())
-    print(simulator.get_current_time_stamp())
+    print(simulator.is_simulation_completed())
+    print(simulator.set_simulation_timebound(0))
+    print(simulator.is_simulation_completed())
     print(simulator.quit())
