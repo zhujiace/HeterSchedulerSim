@@ -93,6 +93,8 @@ public:
 
     void printSimulatorStates();
 
+    Simulator();
+
 };
 
 

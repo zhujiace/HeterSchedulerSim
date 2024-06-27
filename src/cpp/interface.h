@@ -35,6 +35,9 @@ public:
     std::string createProcessor(const std::string & args);
 
     std::string createNewHeterSSTask(const std::string & args);
+
+    std::string setSimulationTimeBound(const std::string & args);
+
 };
 
 #endif // interface.h

@@ -45,11 +45,19 @@ Interface::Interface() {
             {quitFlag = true; return "Exiting...";}},
         {"printSimulatorState", [this](const std::string&)
             {getSimulator().printSimulatorStates();return "Simulator Status Printed";}},
+        {"sortProcessors", [this](const std::string&)
+            {getSimulator().sortProcessorsByType(); return "Sorted";}},
+        {"isSimulationCompleted", [this](const std::string &)
+            {return getSimulator().isSimulationCompleted()?"Yes":"";}},
+        {"updateProcessorAndTask", [this](const std::string &)
+            {getSimulator().updateProcessorAndTask(); return "Updated";}},
     };
     command_map["createProcessor"] = 
         std::bind(&Interface::createProcessor, this, std::placeholders::_1);
     command_map["createHeterSSTask"] =
         std::bind(&Interface::createNewHeterSSTask, this, std::placeholders::_1);
+    command_map["setSimulationTimeBound"] =
+        std::bind(&Interface::setSimulationTimeBound, this, std::placeholders::_1);
 }
 
 ProcessorAffinity_t Interface::stringtoProcessorAffinity(const std::string & procAff) {
@@ -80,9 +88,12 @@ std::string Interface::createProcessor(const std::string & args) {
 
 std::string Interface::createNewHeterSSTask(const std::string & args) {
     std::istringstream ss(args);
-    int procNum = 1;
     std::string temp;
     ss >> temp;
+    int period = 99;
+    period = std::stoi(temp);
+    ss >> temp;
+    int procNum = 1;
     procNum = std::stoi(temp);
 
     std::vector<ProcessorAffinity_t> processorTypes = {};
@@ -95,6 +106,14 @@ std::string Interface::createNewHeterSSTask(const std::string & args) {
         unsigned int segLength = std::stoi(temp);
         segments.push_back(segLength);
     }
-    simulator.createNewHeterSSTaskWithVector(processorTypes, segments);
+    Task & task = simulator.createNewHeterSSTaskWithVector(processorTypes, segments);
+    task.setTaskPeriod(period);
+    task.setTaskRelativeDeadline(period);
     return "Created successfully";
+}
+
+std::string Interface::setSimulationTimeBound(const std::string & args) {
+    unsigned int timeBound = std::stoi(args);
+    simulator.setSimulationTimeBound(timeBound);
+    return "Set bound to " + std::to_string(timeBound);
 }

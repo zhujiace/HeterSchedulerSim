@@ -13,8 +13,6 @@ bool Scheduler::initializeSimulation() {
     // It is recommended to sort in case created in a wrong order
     simulator.sortProcessorsByType();
 
-    simulator.initializeStorages();
-
     std::ifstream input_file;
     std:: cout << "Reading taskset infomation...\n";
     for (int i = 0; i < 5; i++) {
@@ -38,7 +36,7 @@ bool Scheduler::initializeSimulation() {
     }
 
     // Step 2: Start simulation
-    simulator.setSimulationTimeBound(1200);
+    simulator.setSimulationTimeBound(120);
     return true;
 }
 

@@ -94,12 +94,17 @@ void Simulator::updateProcessorAndTask() {
 
     currentTimeStamp++;
     taskReleaseCheckedThisRound = false;
+    checkTaskRelease();
 }
 
 
 void Simulator::initializeStorages() {
     taskset.reserve(10);
     processors.reserve(10);
+}
+
+Simulator::Simulator() {
+    initializeStorages();
 }
 
 static std::ostream & operator<<(std::ostream & os, const Processor & processor) {
