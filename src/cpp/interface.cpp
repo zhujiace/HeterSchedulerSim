@@ -51,6 +51,8 @@ Interface::Interface() {
             {return getSimulator().isSimulationCompleted()?"Yes":"";}},
         {"updateProcessorAndTask", [this](const std::string &)
             {getSimulator().updateProcessorAndTask(); return "Updated";}},
+        {"queryProcessorStates", [this](const std::string &)
+            {return queryProcessorStates();}},
     };
     command_map["createProcessor"] = 
         std::bind(&Interface::createProcessor, this, std::placeholders::_1);
@@ -58,6 +60,10 @@ Interface::Interface() {
         std::bind(&Interface::createNewHeterSSTask, this, std::placeholders::_1);
     command_map["setSimulationTimeBound"] =
         std::bind(&Interface::setSimulationTimeBound, this, std::placeholders::_1);
+    command_map["queryTaskSegmentStates"] = 
+        std::bind(&Interface::queryTaskSegmentStates, this, std::placeholders::_1);
+    command_map["scheduleSegmentOnProcessor"] =
+        std::bind(&Interface::scheduleSegmentOnProcessor, this, std::placeholders::_1);
 }
 
 ProcessorAffinity_t Interface::stringtoProcessorAffinity(const std::string & procAff) {
@@ -66,7 +72,6 @@ ProcessorAffinity_t Interface::stringtoProcessorAffinity(const std::string & pro
             return (ProcessorAffinity_t)i;
     return ProcessorAffinity_t::UNKNOWN;
 }
-
 
 std::string Interface::createProcessor(const std::string & args) {
     std::istringstream ss(args);
@@ -116,4 +121,72 @@ std::string Interface::setSimulationTimeBound(const std::string & args) {
     unsigned int timeBound = std::stoi(args);
     simulator.setSimulationTimeBound(timeBound);
     return "Set bound to " + std::to_string(timeBound);
+}
+
+std::string Interface::queryProcessorStates() {
+    std::string temp = "";
+    for (unsigned int i = 0; i < simulator.queryProcessorCount(); i++) {
+        temp += queryProcessorState(std::to_string(i));
+        temp += " ";
+    }
+    return temp;
+}
+
+std::string Interface::queryProcessorState(const std::string & args) {
+    unsigned int processorId = std::stoi(args);
+    return std::to_string((int)simulator.getProcessor(processorId).queryProcessorState());
+}
+
+std::string Interface::segmentStateHelperFunc(unsigned int taskId, unsigned int segmentId) {
+    std::string result = "";
+    result += std::to_string(int(simulator.getTask(taskId).isSegmentReady(segmentId)));
+    result += " ";
+    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).querySegmentRemainLength());
+    result += " ";
+    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).getCurrentProcessorIndex());
+    result += " ";
+    return result;
+}
+
+std::string Interface::queryTaskSpecifiedSegmentState(const std::string & args) {
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    unsigned int taskId = std::stoi(temp);
+    ss >> temp;
+    unsigned int segmentId = std::stoi(temp);
+
+    return segmentStateHelperFunc(taskId, segmentId);
+}
+
+std::string Interface::queryTaskSegmentStates(const std::string & args) {
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    unsigned int taskId = std::stoi(temp);
+    std::string result;
+    for (unsigned int i = 0 ; i < simulator.getTask(taskId).querySegmentCount(); i++) {
+        result += segmentStateHelperFunc(taskId, i);
+    }
+    return result;
+}
+
+std::string Interface::scheduleSegmentOnProcessor(const std::string & args) {
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    unsigned int procId = std::stoi(temp);
+    ss >> temp;
+    unsigned int taskId = std::stoi(temp);
+    ss >> temp;
+    unsigned int segmentId = std::stoi(temp);
+
+    Task & task = simulator.getTask(taskId);
+    Segment * segment = &(simulator.getTask(taskId).getSegment(segmentId));
+    TimeStamp_t currentTime = simulator.queryCurrentTimeStamp();
+
+    if (simulator.getProcessor(procId).scheduleTaskSpecifiedSegment(task, segment, currentTime)) return "Scheduled";
+    else return "Scheule Error!";
+
+    return "Unknown Error";
 }

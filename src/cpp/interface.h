@@ -38,6 +38,18 @@ public:
 
     std::string setSimulationTimeBound(const std::string & args);
 
+    std::string queryProcessorStates();
+
+    std::string queryProcessorState(const std::string & args);
+
+    std::string segmentStateHelperFunc(unsigned int taskId, unsigned int segId);
+
+    std::string queryTaskSpecifiedSegmentState(const std::string & args);
+
+    std::string queryTaskSegmentStates(const std::string & args);
+
+    std::string scheduleSegmentOnProcessor(const std::string & args);
+
 };
 
 #endif // interface.h
