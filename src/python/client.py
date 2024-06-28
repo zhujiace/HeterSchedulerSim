@@ -5,6 +5,13 @@
 import subprocess
 
 class SimulatorClient:
+    """ Python client for interecting with C++ backend
+
+    Examples
+    --------
+    >>> sim = SimulatorClient("path_to_C++_executable")
+    >>> sim.startSimulation()
+    """
 
     def __init__(self, executable_path):
         self.process = subprocess.Popen(
@@ -14,8 +21,14 @@ class SimulatorClient:
             stderr=None,
             text=True
         )
+        self.procMap = {0: "CPU", 7: "GPU"}
 
-    def send_command(self, command):
+    def send_command(self, command: str):
+        """send command in str to the C++ process
+
+        Returns:
+            str: striped stdout from the C++ backend
+        """
         self.process.stdin.write(command + "\n")
         self.process.stdin.flush()
         return self.process.stdout.readline().strip()
@@ -43,9 +56,13 @@ class SimulatorClient:
         pass
 
     def is_simulation_completed(self) -> bool:
+        """return true is the simulation have reached the limit"""
         return bool(self.send_command("isSimulationCompleted"))
     
     def does_task_miss_deadline(self) -> bool:
+        """return true if there's any task miss deadline,
+        the agent should stop simulation
+        """
         return bool(self.send_command("doesTaskMissDeadline"))
     
     @command_decorator("updateProcessorAndTask")
@@ -61,38 +78,65 @@ class SimulatorClient:
         pass
 
     @command_decorator("createProcessor {} {}")
-    def create_processor(self, procType: str, procNum: int = 1) -> str:
+    def _create_processor_helper(self, procType: str, procNum: int = 1) -> str:
         pass
 
+    def create_processor(self, procType: int, procNum: int = 1) -> str:
+        """create processors in the simulator
+
+        Args:
+            procType (int): 0 -> CPU, 7 -> GPU
+            procNum (int, optional): Defaults to 1.
+
+        Returns:
+            str: Created Successfully
+        """
+        return self._create_processor_helper(self.procMap[procType], procNum)
+
     @command_decorator("createHeterSSTask {} {} {} {}")
-    def create_heter_ss_task_helper(self, period:int, procCount: int,
+    def _create_heter_ss_task_helper(self, period:int, procCount: int,
                                     procs: str, segs: str) -> str:
         pass
 
     def create_heter_ss_task(self, period:int, procCount: int,
-                             proc: 'tuple[str]', segs: 'tuple[int]') -> str:
-        return self.create_heter_ss_task_helper(period, procCount,
-                                                " ".join(proc)+" ",
+                             proc: 'tuple[int]', segs: 'tuple[int]') -> str:
+        """create a heterogenous self-suspension based task in the simulator
+
+        Args:
+            period (int): period of the task
+            procCount (int): number of different processor involved
+            proc (tuple[int]): e.g. (CPU, GPU) -> (0,7)
+            segs (tuple[int]): segments
+
+        Examples:
+        >>> (5, 2, (0,7), (1,1,1,1,1))
+        """
+        return self._create_heter_ss_task_helper(period, procCount,
+                                                " ".join([self.procMap[x] for x in proc]) + " ",
                                                 " ".join(map(str, segs))+" ")
 
     @command_decorator("queryProcessorStates")
-    def query_processor_state_helper(self) -> str:
+    def _query_processor_state_helper(self) -> str:
         pass
 
     def query_processor_state(self) -> 'tuple[int]':
-        res = self.query_processor_state_helper()
+        res = self._query_processor_state_helper()
         return tuple(map(int, res.split()))
 
     @command_decorator("queryTaskSegmentStates {}")
-    def query_task_segment_states_helper(self, taskId: int) -> str:
+    def _query_task_segment_states_helper(self, taskId: int) -> str:
         pass
 
     def query_task_segment_states(self, taskId: int) -> 'list[tuple[int]]':
-        res = self.query_task_segment_states_helper(taskId)
+        res = self._query_task_segment_states_helper(taskId)
         resList = list(map(int, res.split()))
         result = []
-        for i in range(len(resList)//3):
-            result.append((resList[3*i], resList[3*i+1], resList[3*i+2]))
+        for i in range(len(resList)//4):
+            result.append((resList[4*i], resList[4*i+1], resList[4*i+2], resList[4*i+3]))
+        return result
+    
+    def query_task_states(self) -> 'list[int]':
+        result = list(map(int, self.send_command("queryTaskStates").split()))
         return result
 
     @command_decorator("scheduleSegmentOnProcessor {} {} {}")
@@ -104,8 +148,10 @@ class SimulatorClient:
 
 if __name__ == "__main__":
     simulator = SimulatorClient("/home/hamster/HeterSchedulerSim/build/main")
-    print(simulator.create_processor("CPU", 2))
-    print(simulator.create_heter_ss_task(5,2,("CPU", "GPU"), (1,1,1,1,1)))
+    CPU = 0; GPU = 7
+    print(simulator.create_processor(CPU, 2))
+    print(simulator.create_processor(GPU, 1))
+    print(simulator.create_heter_ss_task(5,2,(CPU, GPU), (1,1,1,1,1)))
     print(simulator.start_simulation())
     print(simulator.print())
     print(simulator.schedule_segment_on_processor(0,0,0))

@@ -48,6 +48,8 @@ public:
 
     std::string queryTaskSegmentStates(const std::string & args);
 
+    std::string queryTaskStates();
+
     std::string scheduleSegmentOnProcessor(const std::string & args);
 
     std::string updateProcessorAndTask();

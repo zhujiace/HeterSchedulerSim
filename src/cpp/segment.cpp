@@ -10,6 +10,8 @@ bool Segment::resetSegment() {
     if (segmentRemainLength !=0) return false;
     segmentRemainLength = segmentLength;
     currentProcessor = 999999;
+    segmentCompleted = false;
+    segmentReady = false;
     return true;
 }
 

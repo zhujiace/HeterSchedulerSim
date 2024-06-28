@@ -77,6 +77,7 @@ public:
 
     ProcessorType_t queryProcessorType() const {return processorType;};
     ProcessorState_t queryProcessorState() const {return processorState;};
+    ProcessorIndex_t queryProcessorInternalIndex() {return processorInternalIndex;};
     ProcessorIndex_t queryProcessorGlobalIndex() {return processorGlobalIndex;};
     std::string queryProcessorTypeName() const {return processor::ProcessorTypeNames[processorType];}
 

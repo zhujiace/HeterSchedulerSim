@@ -76,7 +76,7 @@ public:
             segmentPreemption(segmentPreemption) {};
     
     /**
-     * @brief Task may be period, the segment is reinited and executed again.
+     * @brief Task may be periodic, the segment is reinited and executed again.
      * @return True if reseted successfully, False if the reset behavior is inproper,
      * e.g. reset before the segment has finished.
     */
