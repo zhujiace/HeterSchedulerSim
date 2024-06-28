@@ -39,8 +39,6 @@ Interface::Interface() {
     command_map = {
         {"queryCurrentTimeStamp", [this](const std::string&)
             {return std::to_string(getSimulator().queryCurrentTimeStamp());}},
-        {"update", [this](const std::string&) 
-            {getSimulator().updateProcessorAndTask();return "Updated";}},
         {"quit", [this](const std::string&)
             {quitFlag = true; return "Exiting...";}},
         {"printSimulatorState", [this](const std::string&)
@@ -49,10 +47,14 @@ Interface::Interface() {
             {getSimulator().sortProcessorsByType(); return "Sorted";}},
         {"isSimulationCompleted", [this](const std::string &)
             {return getSimulator().isSimulationCompleted()?"Yes":"";}},
+        {"doesTaskMissDeadline", [this](const std::string &)
+            {return getSimulator().doesTaskMissDeadline()?"Yes":"";}},
         {"updateProcessorAndTask", [this](const std::string &)
-            {getSimulator().updateProcessorAndTask(); return "Updated";}},
+            {return updateProcessorAndTask();}},
         {"queryProcessorStates", [this](const std::string &)
             {return queryProcessorStates();}},
+        {"startSimulation", [this](const std::string &)
+            {getSimulator().checkTaskRelease(); return "Initial Tasks Released";}},
     };
     command_map["createProcessor"] = 
         std::bind(&Interface::createProcessor, this, std::placeholders::_1);
@@ -132,6 +134,12 @@ std::string Interface::queryProcessorStates() {
     return temp;
 }
 
+
+/**
+ * @brief return the state of the specified processor
+ * @param args "<procId>"
+ * @return "<processorState>", 0-IDLE, 1-PREEMPTIVE, 2-NONPREEMPTIVE
+*/
 std::string Interface::queryProcessorState(const std::string & args) {
     unsigned int processorId = std::stoi(args);
     return std::to_string((int)simulator.getProcessor(processorId).queryProcessorState());
@@ -148,6 +156,11 @@ std::string Interface::segmentStateHelperFunc(unsigned int taskId, unsigned int 
     return result;
 }
 
+/**
+ * @brief return current state of a specified segment
+ * @param args "<taskId> <segmentId>"
+ * @return "<isSegmentReady> <remainLength> <currentProcessor>"
+*/
 std::string Interface::queryTaskSpecifiedSegmentState(const std::string & args) {
     std::istringstream ss(args);
     std::string temp;
@@ -159,6 +172,11 @@ std::string Interface::queryTaskSpecifiedSegmentState(const std::string & args) 
     return segmentStateHelperFunc(taskId, segmentId);
 }
 
+/**
+ * @brief return the states of all segments in this task
+ * @param args "<taskId>"
+ * @see queryTaskSpecifiedSegmentState
+*/
 std::string Interface::queryTaskSegmentStates(const std::string & args) {
     std::istringstream ss(args);
     std::string temp;
@@ -171,6 +189,10 @@ std::string Interface::queryTaskSegmentStates(const std::string & args) {
     return result;
 }
 
+/**
+ * @param args "<procId> <taskId> <segmentId>"
+ * @brief Send the segment schedlue command
+*/
 std::string Interface::scheduleSegmentOnProcessor(const std::string & args) {
     std::istringstream ss(args);
     std::string temp;
@@ -189,4 +211,11 @@ std::string Interface::scheduleSegmentOnProcessor(const std::string & args) {
     else return "Scheule Error!";
 
     return "Unknown Error";
+}
+
+std::string Interface::updateProcessorAndTask() {
+    simulator.updateProcessorAndTask();
+    if (simulator.doesTaskMissDeadline())
+        std::cout << "Task miss deadline! Please Exit!\n";
+    return "Updated to timestamp " + std::to_string(simulator.queryCurrentTimeStamp());
 }

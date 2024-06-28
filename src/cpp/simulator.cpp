@@ -86,13 +86,14 @@ void Simulator::updateProcessorAndTask() {
         }
     }
 
+    currentTimeStamp++;
+    
     for (Task & task: taskset) {
         task.checkTaskStates();
         if (task.checkWhetherMissDDL(currentTimeStamp))
             taskMissDeadline = true;
     }
-
-    currentTimeStamp++;
+    
     taskReleaseCheckedThisRound = false;
     checkTaskRelease();
 }

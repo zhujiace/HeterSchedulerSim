@@ -50,6 +50,8 @@ public:
 
     std::string scheduleSegmentOnProcessor(const std::string & args);
 
+    std::string updateProcessorAndTask();
+
 };
 
 #endif // interface.h
