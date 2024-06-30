@@ -62,6 +62,8 @@ public:
     SegmentLength_t querySegmentLength() const {return segmentLength;};
     SegmentLength_t querySegmentRemainLength() {return segmentRemainLength;};
     ProcessorAffinity_t querySegmentProcessorAffinity() {return segmentAffinity;}
+    SegmentIndex_t querySegmentIndex() {return segmentIndex;}
+    void setSegmentIndex(SegmentIndex_t index) {segmentIndex = index;}
     // may return false if the non-preemptive segment is not executed continuously
     bool executeSegment(TimeStamp_t timeStamp);
 

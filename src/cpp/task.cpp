@@ -46,6 +46,7 @@ Segment & Task::createNewSegment(ProcessorAffinity_t processorAffinity, SegmentL
         this->segments.push_back(Segment(segmentLength, processorAffinity, SegmentPreemption_t::PREEMPTIVE));
     else
         this->segments.push_back(Segment(segmentLength, processorAffinity, SegmentPreemption_t::NONPREEMPTIVE));
+    segments.back().setSegmentIndex(segments.size()-1);
     return segments.back();
 }
 

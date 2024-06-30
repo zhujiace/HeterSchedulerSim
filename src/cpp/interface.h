@@ -20,6 +20,8 @@ class Interface {
 
     bool quitFlag = false;
 
+    bool interactive = false;
+
 public:
 
     bool readCommands();

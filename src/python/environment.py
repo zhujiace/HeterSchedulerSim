@@ -29,11 +29,14 @@ class SimulationEnv:
         self.task_generator = TaskRandomGenerator(self.seed)
         self.accumulated_reward = 0
 
-        self.task_state = np.zeros(10, dtype=tuple)
+        self.task_state = np.zeros(5, dtype=tuple)
         self.avail_actions = []
         self.searched_at = -1
 
     
+    def __del__(self):
+        del self.client
+
     def reset(self):
         del self.client
         self.client = SimulatorClient("../../build/main")
@@ -54,6 +57,9 @@ class SimulationEnv:
         Returns:
             list[tuple]: (i,j,k), schedule the k-th segment of j-th task on i-th processor
         """
+        if self.client is None:
+            from sys import stderr
+            print("Please use reset() first before find the action spaces", file=stderr)
         self.query_state()
         if self.searched_at == self.client.get_current_time_stamp():
             return self.avail_actions
@@ -66,8 +72,8 @@ class SimulationEnv:
                 for k,segment in enumerate(task_state[1]):
                     # not the same affinity
                     if segment[0]!=proc_state[0]: continue
-                    # already on the processor, useless
-                    if segment[1]==i: continue
+                    # already on some processor, useless to schedule on others
+                    if segment[1]<999999: continue
                     # segment not ready yet
                     if segment[2]==0: continue
                     # segment is already completed
@@ -105,7 +111,7 @@ class SimulationEnv:
             new_avail_actions.append(action)
         self.avail_actions = new_avail_actions
 
-        return self.query_state(), 1, False, {}
+        return self.query_state(), 0, False, {}
 
     def query_state(self) -> 'tuple':
         self.current_time = self.client.get_current_time_stamp()
@@ -132,15 +138,17 @@ class SimulationEnv:
             terminate (bool): true if (either miss ddl / complete)
             info (dict): should be empty by default
         """
-        self.update_time()
+        reward = self.client.update_processor_and_task()
 
-        reward = 0
         terminate = False
         if self.client.does_task_miss_deadline():
-            reward = -5000
+            reward -= 5000
             terminate = True
         elif self.client.is_simulation_completed():
-            reward = 500
+            reward += 500
             terminate = True
 
         return self.query_state(), reward, terminate, {}
+
+    def debug_print(self):
+        self.client.print()

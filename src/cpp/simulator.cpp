@@ -77,7 +77,7 @@ bool Simulator::checkTaskRelease() {
     return (taskReleaseCheckedThisRound = true);
 }
 
-void Simulator::updateProcessorAndTask() {
+int Simulator::updateProcessorAndTask() {
     if (!taskReleaseCheckedThisRound) checkTaskRelease();
 
     for (Processor & processor: processors) {
@@ -86,16 +86,23 @@ void Simulator::updateProcessorAndTask() {
         }
     }
 
+    int temp = 0;
+
     currentTimeStamp++;
     
     for (Task & task: taskset) {
         task.checkTaskStates();
         if (task.checkWhetherMissDDL(currentTimeStamp))
             taskMissDeadline = true;
+        temp += task.queryExecutedSegLength();
     }
+
+    temp = temp - taskExecutedTotal;
+    taskExecutedTotal += temp;
     
     taskReleaseCheckedThisRound = false;
     checkTaskRelease();
+    return temp;
 }
 
 
@@ -125,9 +132,10 @@ static std::ostream & operator<<(std::ostream & os, const Processor & processor)
     os << std::string(", Task ");
     if (processor.getCurrentTask())
     os << std::to_string(processor.getCurrentTask()->queryTaskIndex());
-    os << std::string(", Segment: ");
+    os << std::string(", Segment");
     if (processor.getCurrentSegment())
-    os << std::to_string(processor.getCurrentSegment()->querySegmentLength() - processor.getCurrentSegment()->querySegmentRemainLength())
+    os << std::string("(") << std::to_string(processor.getCurrentSegment()->querySegmentIndex()) << std::string("): ")
+       << std::to_string(processor.getCurrentSegment()->querySegmentLength() - processor.getCurrentSegment()->querySegmentRemainLength())
        << std::string("/") << std::to_string(processor.getCurrentSegment()->querySegmentLength());
     return os;
 }

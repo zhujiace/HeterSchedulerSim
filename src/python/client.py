@@ -81,8 +81,15 @@ class SimulatorClient:
         return bool(self.send_command("doesTaskMissDeadline"))
     
     @command_decorator("updateProcessorAndTask")
-    def update_processor_and_task(self) -> str:
+    def update_processor_and_task_helper(self) -> str:
         pass
+
+    def update_processor_and_task(self) -> int:
+        res = self.update_processor_and_task_helper().split()
+        executed = int(res[0])
+        if executed < 0: 
+            print("Error occured during updating!")
+        return executed
 
     @command_decorator("sortProcessors")
     def sort_processors(self) -> str:

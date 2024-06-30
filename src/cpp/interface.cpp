@@ -8,11 +8,11 @@ Copy Right. The EHPCL Authors.
 
 bool Interface::readCommands() {
     std::string line;
-    std::cerr << ">>> ";
+    if (interactive) std::cerr << ">>> ";
     while (std::getline(std::cin, line)) {
         std::cout << processCommand(line) << std::endl;
         if (quitFlag) return true;
-        std::cerr << ">>> ";
+        if (interactive) std::cerr << ">>> ";
     }
 
     return true;
@@ -227,10 +227,11 @@ std::string Interface::scheduleSegmentOnProcessor(const std::string & args) {
 }
 
 std::string Interface::updateProcessorAndTask() {
-    simulator.updateProcessorAndTask();
+    int res = simulator.updateProcessorAndTask();
     if (simulator.doesTaskMissDeadline())
-        std::cout << "Task miss deadline! Please Exit!\n";
-    return "Updated to timestamp " + std::to_string(simulator.queryCurrentTimeStamp());
+        std::cerr << "Task miss deadline! Please Exit!\n";
+    return std::to_string(res) + " executed. Updated to timestamp " +
+           std::to_string(simulator.queryCurrentTimeStamp());
 }
 
 /**

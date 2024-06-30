@@ -30,6 +30,8 @@ class Simulator {
 
     bool taskReleaseCheckedThisRound = false;
 
+    int taskExecutedTotal = 0;
+
     //TODO: support more task types by adding other attributes.
 public:
 
@@ -80,8 +82,9 @@ public:
      * @attention This action should be called after the scheduling decisions are done.
      * 
      * Task release will be automatically checked.
+     * @return total executed length, error if negative
     */
-    void updateProcessorAndTask();
+    int updateProcessorAndTask();
 
     void setSimulationTimeBound(TimeStamp_t simulationBound) 
         {maximumSimulationTime = simulationBound;};
