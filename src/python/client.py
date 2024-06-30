@@ -14,14 +14,29 @@ class SimulatorClient:
     """
 
     def __init__(self, executable_path):
+        self.executable = executable_path
+        self.procMap = {0: "CPU", 7: "GPU"}
         self.process = subprocess.Popen(
-            [executable_path],
+            [self.executable],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=None,
             text=True
         )
-        self.procMap = {0: "CPU", 7: "GPU"}
+    
+    def __del__(self):
+        self.quit()
+        
+    def restart(self):
+        if self.process.poll() is None:
+            self.process.kill()
+        self.process = subprocess.Popen(
+            [self.executable],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=None,
+            text=True
+        )
 
     def send_command(self, command: str):
         """send command in str to the C++ process
@@ -116,27 +131,47 @@ class SimulatorClient:
                                                 " ".join(map(str, segs))+" ")
 
     @command_decorator("queryProcessorStates")
-    def _query_processor_state_helper(self) -> str:
+    def _query_processor_states_helper(self) -> str:
         pass
 
-    def query_processor_state(self) -> 'tuple[int]':
-        res = self._query_processor_state_helper()
-        return tuple(map(int, res.split()))
+    def query_processor_states(self) -> 'tuple':
+        """query the states of all processors
 
-    @command_decorator("queryTaskSegmentStates {}")
-    def _query_task_segment_states_helper(self, taskId: int) -> str:
-        pass
-
-    def query_task_segment_states(self, taskId: int) -> 'list[tuple[int]]':
-        res = self._query_task_segment_states_helper(taskId)
-        resList = list(map(int, res.split()))
+        Returns:
+            tuple: <p1> <p2> <p3> ...
+        Notes:
+            processorState: <procType> <processorState>
+        """
+        res = self._query_processor_states_helper()
+        mapped = list(map(int, res.split()))
         result = []
-        for i in range(len(resList)//4):
-            result.append((resList[4*i], resList[4*i+1], resList[4*i+2], resList[4*i+3]))
-        return result
+        for i in range(len(mapped)//2):
+            temp = (mapped[2*i], mapped[2*i+1])
+            result.append(temp)
+        return tuple(result)
+
+    @command_decorator("queryTaskState {}")
+    def _query_task_state_helper(self, taskId: int) -> str:
+        pass
+
+    def query_task_state(self, taskId: int) -> 'tuple':
+        """query the task state by index
+
+        Returns:
+            tuple: (<period> (<s1>, <s2>, ...))
+        Notes:
+            segmentState: <affinity> <currentProcessor> <isSegmentReady> <length> <remainLength> 
+        """
+        res = self._query_task_state_helper(taskId)
+        mapped = list(map(int, res.split()))
+        result = []
+        for i in range(len(mapped)//5):
+            temp = (mapped[5*i+1], mapped[5*i+2], mapped[5*i+3], mapped[5*i+4], mapped[5*i+5])
+            result.append(temp)
+        return (mapped[0], tuple(result))
     
-    def query_task_states(self) -> 'list[int]':
-        result = list(map(int, self.send_command("queryTaskStates").split()))
+    def query_task_execution_states(self) -> 'list[int]':
+        result = list(map(int, self.send_command("queryTaskExecutionStates").split()))
         return result
 
     @command_decorator("scheduleSegmentOnProcessor {} {} {}")
@@ -160,6 +195,8 @@ if __name__ == "__main__":
     print(simulator.update_processor_and_task())
     print(simulator.update_processor_and_task())
     print(simulator.schedule_segment_on_processor(1, 0, 1))
+    print(simulator.query_processor_states())
+    print(simulator.query_task_state(0))
     print(simulator.update_processor_and_task())
     print(simulator.print())
     print(simulator.update_processor_and_task())

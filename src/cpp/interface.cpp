@@ -53,8 +53,8 @@ Interface::Interface() {
             {return updateProcessorAndTask();}},
         {"queryProcessorStates", [this](const std::string &)
             {return queryProcessorStates();}},
-        {"queryTaskStates", [this](const std::string &)
-            {return queryTaskStates();}},
+        {"queryTaskExecutionStates", [this](const std::string &)
+            {return queryTaskExecutionStates();}},
         {"startSimulation", [this](const std::string &)
             {getSimulator().checkTaskRelease(); return "Initial Tasks Released";}},
     };
@@ -64,8 +64,8 @@ Interface::Interface() {
         std::bind(&Interface::createNewHeterSSTask, this, std::placeholders::_1);
     command_map["setSimulationTimeBound"] =
         std::bind(&Interface::setSimulationTimeBound, this, std::placeholders::_1);
-    command_map["queryTaskSegmentStates"] = 
-        std::bind(&Interface::queryTaskSegmentStates, this, std::placeholders::_1);
+    command_map["queryTaskState"] = 
+        std::bind(&Interface::queryTaskState, this, std::placeholders::_1);
     command_map["scheduleSegmentOnProcessor"] =
         std::bind(&Interface::scheduleSegmentOnProcessor, this, std::placeholders::_1);
 }
@@ -140,22 +140,31 @@ std::string Interface::queryProcessorStates() {
 /**
  * @brief return the state of the specified processor
  * @param args "<procId>"
- * @return "<processorState>", 0-IDLE, 1-PREEMPTIVE, 2-NONPREEMPTIVE
+ * @return "<procType> <processorState>", 0-IDLE, 1-PREEMPTIVE, 2-NONPREEMPTIVE
 */
 std::string Interface::queryProcessorState(const std::string & args) {
     unsigned int processorId = std::stoi(args);
-    return std::to_string((int)simulator.getProcessor(processorId).queryProcessorState());
+    std::string res = "";
+    res += std::to_string((int)simulator.getProcessor(processorId).queryProcessorType());
+    res += " ";
+    res += std::to_string((int)simulator.getProcessor(processorId).queryProcessorState());
+    return res;
 }
 
+/**
+ * @return "<affinity> <currentProcessor> <isSegmentReady> <length> <remainLength> "
+ */
 std::string Interface::segmentStateHelperFunc(unsigned int taskId, unsigned int segmentId) {
     std::string result = "";
     result += std::to_string(int(simulator.getTask(taskId).getSegment(segmentId).querySegmentProcessorAffinity()));
     result += " ";
+    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).getCurrentProcessorIndex());
+    result += " ";
     result += std::to_string(int(simulator.getTask(taskId).isSegmentReady(segmentId)));
     result += " ";
-    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).querySegmentRemainLength());
+    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).querySegmentLength());
     result += " ";
-    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).getCurrentProcessorIndex());
+    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).querySegmentRemainLength());
     result += " ";
     return result;
 }
@@ -163,7 +172,7 @@ std::string Interface::segmentStateHelperFunc(unsigned int taskId, unsigned int 
 /**
  * @brief return current state of a specified segment
  * @param args "<taskId> <segmentId>"
- * @return "<affinity> <isSegmentReady> <remainLength> <currentProcessor>"
+ * @return "<affinity> <currentProcessor> <isSegmentReady> <length> <remainLength> "
 */
 std::string Interface::queryTaskSpecifiedSegmentState(const std::string & args) {
     std::istringstream ss(args);
@@ -224,9 +233,30 @@ std::string Interface::updateProcessorAndTask() {
     return "Updated to timestamp " + std::to_string(simulator.queryCurrentTimeStamp());
 }
 
-std::string Interface::queryTaskStates() {
+/**
+ * @return <t1.executedLength> <t2.executedLength> ...
+ */
+std::string Interface::queryTaskExecutionStates() {
     std::string result = "";
     for (unsigned int i = 0; i < simulator.queryTaskCount(); i++)
         result += (std::to_string(simulator.getTask(i).queryExecutedSegLength()) + " ");
+    return result;
+}
+
+/**
+ * @brief return the overall state of a task
+ * @return <period> <s0.segmentState> <s1.segmentState> ...
+ * @param args the task index
+ * @note segmentState: <affinity> <currentProcessor> <isSegmentReady> <length> <remainLength> 
+ */
+std::string Interface::queryTaskState(const std::string & args) {
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    unsigned int taskId = std::stoi(temp);
+    std::string result = "";
+    result += std::to_string(simulator.getTask(taskId).queryTaskPeriod());
+    result += " ";
+    result += queryTaskSegmentStates(args);
     return result;
 }
