@@ -43,7 +43,7 @@ bool Processor::scheduleTaskSpecifiedSegment(Task & taskToschedule, Segment * se
     if (currentSegment) {
         // There's task going on processor
         if (processorPreemption!=ProcessorPreemption_t::PREEMPTIVE) return false;
-        if (segment->getCurrentProcessorIndex()!=999999)
+        if (segment->queryCurrentProcessorIndex()!=999999)
             return false;
         currentTask->setTaskPreempted();
         currentSegment->setCurrentProcessorIndex(999999);

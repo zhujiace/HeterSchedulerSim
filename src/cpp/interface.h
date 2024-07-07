@@ -50,6 +50,10 @@ public:
 
     std::string queryTaskSegmentStates(const std::string & args);
 
+    std::string querySSTaskSegmentStates(const std::string & args);
+
+    std::string querySSTaskStates(const std::string & args);
+
     std::string queryTaskExecutionStates();
 
     std::string queryTaskState(const std::string & args);

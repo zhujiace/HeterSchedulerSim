@@ -167,11 +167,19 @@ std::vector<SegmentIndex_t> & Task::getReadySegments() {
     return readySegments;
 }
 
+Segment * Task::getFirstReadySegment() {
+    getReadySegments();
+    for (SegmentIndex_t & i : readySegments)
+        if (segments[i].queryCurrentProcessorIndex() == 999999)
+            return &(segments[i]);
+    return nullptr;
+}
+
 Segment * Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
     getReadySegments();
     for (SegmentIndex_t & i : readySegments)
         if (segments[i].querySegmentProcessorAffinity()==processorAffinity)
-            if (segments[i].getCurrentProcessorIndex() == 999999)
+            if (segments[i].queryCurrentProcessorIndex() == 999999)
                 return &(segments[i]);
     return nullptr;
 }

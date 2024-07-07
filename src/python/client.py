@@ -23,9 +23,11 @@ class SimulatorClient:
             stderr=None,
             text=True
         )
+        self.alreadyQuit = False
     
     def __del__(self):
-        self.quit()
+        if (not self.alreadyQuit):
+            self.quit()
         
     def restart(self):
         if self.process.poll() is None:
@@ -64,6 +66,7 @@ class SimulatorClient:
     
     @command_decorator("quit")
     def quit(self) -> str:
+        self.alreadyQuit = True
         pass
     
     @command_decorator("setSimulationTimeBound {}")
@@ -147,13 +150,14 @@ class SimulatorClient:
         Returns:
             tuple: <p1> <p2> <p3> ...
         Notes:
-            processorState: <procType> <processorState>
+            processorState: <procType> <processorState> <taskIndex> <segIndex>
+            The index of task / segment is only available when state is busy
         """
         res = self._query_processor_states_helper()
         mapped = list(map(int, res.split()))
         result = []
-        for i in range(len(mapped)//2):
-            temp = (mapped[2*i], mapped[2*i+1])
+        for i in range(len(mapped)//4):
+            temp = (mapped[4*i], mapped[4*i+1], mapped[4*i+2], mapped[4*i+3])
             result.append(temp)
         return tuple(result)
 
@@ -177,6 +181,20 @@ class SimulatorClient:
             result.append(temp)
         return (mapped[0], tuple(result))
     
+    def query_ss_task_state(self, taskId: int) -> 'tuple':
+        """query the self-suspension based task state by index
+
+        Returns:
+            tuple: (<period> <readySegIndex> <currentProcessor> <remainLength> (<SSSegStates>))\n
+            SSSegStates: <affinity> <segmentLength>
+        """
+        mapped = list(map(int, self.send_command(f"querySSTaskStates {taskId}").split()))
+        result = []
+        for i in range(2, len(mapped)//2):
+            temp = (mapped[2*i], mapped[2*i+1])
+            result.append(temp)
+        return (mapped[0], mapped[1], mapped[2], mapped[3], tuple(result))
+    
     def query_task_execution_states(self) -> 'list[int]':
         result = list(map(int, self.send_command("queryTaskExecutionStates").split()))
         return result
@@ -193,7 +211,7 @@ if __name__ == "__main__":
     CPU = 0; GPU = 7
     print(simulator.create_processor(CPU, 2))
     print(simulator.create_processor(GPU, 1))
-    print(simulator.create_heter_ss_task(5,2,(CPU, GPU), (1,1,1,1,1)))
+    print(simulator.create_heter_ss_task(6,2,(CPU, GPU), (1,1,1,1,1)))
     print(simulator.start_simulation())
     print(simulator.print())
     print(simulator.schedule_segment_on_processor(0,0,0))
@@ -203,11 +221,11 @@ if __name__ == "__main__":
     print(simulator.update_processor_and_task())
     print(simulator.schedule_segment_on_processor(1, 0, 1))
     print(simulator.query_processor_states())
-    print(simulator.query_task_state(0))
+    print(simulator.query_ss_task_state(0))
     print(simulator.update_processor_and_task())
     print(simulator.print())
     print(simulator.update_processor_and_task())
     print(simulator.print())
     print(simulator.update_processor_and_task())
     print(simulator.does_task_miss_deadline())
-    simulator.quit()
+    # simulator.quit()

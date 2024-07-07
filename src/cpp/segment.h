@@ -86,7 +86,7 @@ public:
 
     void setCurrentProcessorIndex(ProcessorIndex_t processorInd) 
         {currentProcessor = processorInd;};
-    ProcessorIndex_t getCurrentProcessorIndex() { return currentProcessor;};
+    ProcessorIndex_t queryCurrentProcessorIndex() { return currentProcessor;};
 };
 
 #endif // segment.h

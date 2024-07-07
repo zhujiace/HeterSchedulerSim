@@ -68,6 +68,8 @@ Interface::Interface() {
         std::bind(&Interface::queryTaskState, this, std::placeholders::_1);
     command_map["scheduleSegmentOnProcessor"] =
         std::bind(&Interface::scheduleSegmentOnProcessor, this, std::placeholders::_1);
+    command_map["querySSTaskStates"] =
+        std::bind(&Interface::querySSTaskStates, this, std::placeholders::_1);
 }
 
 ProcessorAffinity_t Interface::stringtoProcessorAffinity(const std::string & procAff) {
@@ -148,6 +150,14 @@ std::string Interface::queryProcessorState(const std::string & args) {
     res += std::to_string((int)simulator.getProcessor(processorId).queryProcessorType());
     res += " ";
     res += std::to_string((int)simulator.getProcessor(processorId).queryProcessorState());
+    if ((int)simulator.getProcessor(processorId).queryProcessorState() >= 1) {
+        res += " ";
+        res += std::to_string((int)simulator.getProcessor(processorId).getCurrentTask()->queryTaskIndex());
+        res += " ";
+        res += std::to_string((int)simulator.getProcessor(processorId).getCurrentSegment()->querySegmentIndex());        
+    } else {
+        res += " 0 0";
+    }
     return res;
 }
 
@@ -158,7 +168,7 @@ std::string Interface::segmentStateHelperFunc(unsigned int taskId, unsigned int 
     std::string result = "";
     result += std::to_string(int(simulator.getTask(taskId).getSegment(segmentId).querySegmentProcessorAffinity()));
     result += " ";
-    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).getCurrentProcessorIndex());
+    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).queryCurrentProcessorIndex());
     result += " ";
     result += std::to_string(int(simulator.getTask(taskId).isSegmentReady(segmentId)));
     result += " ";
@@ -260,4 +270,50 @@ std::string Interface::queryTaskState(const std::string & args) {
     result += " ";
     result += queryTaskSegmentStates(args);
     return result;
+}
+
+/**
+ * @param args the task index
+ * @return <s0> <s1> ..., each consists of (<affinity> <length>)
+*/
+std::string Interface::querySSTaskSegmentStates(const std::string & args) {
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    unsigned int taskId = std::stoi(temp);
+
+    std::string result = "";
+    for (unsigned int i = 0 ; i < simulator.getTask(taskId).querySegmentCount(); i++) {
+        result += std::to_string(int(simulator.getTask(taskId).getSegment(i).querySegmentProcessorAffinity()));
+        result += " ";
+        result += std::to_string(simulator.getTask(taskId).getSegment(i).querySegmentLength());
+        result += " ";
+    }
+    return result;
+}
+
+/**
+ * @param args the task index
+ * @return <period> <readySegIndex> <currentProcessor> <remainLength> <s0> <s1> ...
+*/
+std::string Interface::querySSTaskStates(const std::string & args) {
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    unsigned int taskId = std::stoi(temp);
+
+    std::string result = "";
+    result += std::to_string(simulator.getTask(taskId).queryTaskPeriod());
+    result += " ";
+    auto * segPtr = simulator.getTask(taskId).getFirstReadySegment();
+    if (!segPtr) result +="-1 999999 0 ";
+    else {
+        result += std::to_string(segPtr->querySegmentIndex());
+        result += " ";
+        result += std::to_string(segPtr->queryCurrentProcessorIndex());
+        result += " ";
+        result += std::to_string(segPtr->querySegmentRemainLength());
+        result += " ";
+    }
+    return result + querySSTaskSegmentStates(args);
 }
