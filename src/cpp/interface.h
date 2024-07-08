@@ -32,6 +32,10 @@ public:
 
     Interface();
 
+    Interface(int argc, char ** argv);
+
+    void initCommandMap();
+
     ProcessorAffinity_t stringtoProcessorAffinity(const std::string & processorAffinity);
 
     std::string createProcessor(const std::string & args);

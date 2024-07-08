@@ -6,6 +6,11 @@ Copy Right. The EHPCL Authors.
 #include <sstream>
 #include "interface.h"
 
+Interface::Interface(int argc, char ** argv) {
+    if (argc >= 2) this->interactive = true;
+    initCommandMap();
+}
+
 bool Interface::readCommands() {
     std::string line;
     if (interactive) std::cerr << ">>> ";
@@ -35,6 +40,10 @@ std::string Interface::processCommand(const std::string & command) {
 }
 
 Interface::Interface() {
+    initCommandMap();
+};
+
+void Interface::initCommandMap() {
 
     command_map = {
         {"queryCurrentTimeStamp", [this](const std::string&)
