@@ -66,6 +66,8 @@ public:
 
     std::string updateProcessorAndTask();
 
+    int parseFirstInteger(const std::string & args);
+
 };
 
 #endif // interface.h

@@ -210,10 +210,9 @@ std::string Interface::queryTaskSpecifiedSegmentState(const std::string & args) 
  * @see queryTaskSpecifiedSegmentState
 */
 std::string Interface::queryTaskSegmentStates(const std::string & args) {
-    std::istringstream ss(args);
-    std::string temp;
-    ss >> temp;
-    unsigned int taskId = std::stoi(temp);
+    int tmp = parseFirstInteger(args);
+    if (tmp < 0) return "Invalid args!";
+    unsigned int taskId = (unsigned int)tmp;
     std::string result;
     for (unsigned int i = 0 ; i < simulator.getTask(taskId).querySegmentCount(); i++) {
         result += segmentStateHelperFunc(taskId, i);
@@ -270,14 +269,26 @@ std::string Interface::queryTaskExecutionStates() {
  * @note segmentState: <affinity> <currentProcessor> <isSegmentReady> <length> <remainLength> 
  */
 std::string Interface::queryTaskState(const std::string & args) {
-    std::istringstream ss(args);
-    std::string temp;
-    ss >> temp;
-    unsigned int taskId = std::stoi(temp);
+    int tmp = parseFirstInteger(args);
+    if (tmp < 0) return "Invalid args!";
+    unsigned int taskId = (unsigned int)tmp;
     std::string result = "";
     result += std::to_string(simulator.getTask(taskId).queryTaskPeriod());
     result += " ";
     result += queryTaskSegmentStates(args);
+    return result;
+}
+
+int Interface::parseFirstInteger(const std::string & args) {
+    if (args.empty()) return -1;
+    std::string argCopy = args;
+    argCopy.erase(0, argCopy.find_first_not_of(" "));
+    argCopy.erase(argCopy.find_last_not_of(" ")+1);
+    if (argCopy.empty()) return -1;
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    unsigned int result = std::stoi(temp);
     return result;
 }
 
@@ -286,10 +297,9 @@ std::string Interface::queryTaskState(const std::string & args) {
  * @return <s0> <s1> ..., each consists of (<affinity> <length>)
 */
 std::string Interface::querySSTaskSegmentStates(const std::string & args) {
-    std::istringstream ss(args);
-    std::string temp;
-    ss >> temp;
-    unsigned int taskId = std::stoi(temp);
+    int tmp = parseFirstInteger(args);
+    if (tmp < 0) return "Invalid args!";
+    unsigned int taskId = (unsigned int)tmp;
 
     std::string result = "";
     for (unsigned int i = 0 ; i < simulator.getTask(taskId).querySegmentCount(); i++) {
@@ -306,10 +316,9 @@ std::string Interface::querySSTaskSegmentStates(const std::string & args) {
  * @return <period> <readySegIndex> <currentProcessor> <remainLength> <s0> <s1> ...
 */
 std::string Interface::querySSTaskStates(const std::string & args) {
-    std::istringstream ss(args);
-    std::string temp;
-    ss >> temp;
-    unsigned int taskId = std::stoi(temp);
+    int tmp = parseFirstInteger(args);
+    if (tmp < 0) return "Invalid args!";
+    unsigned int taskId = (unsigned int)tmp;
 
     std::string result = "";
     result += std::to_string(simulator.getTask(taskId).queryTaskPeriod());

@@ -38,6 +38,8 @@ bool Processor::workProcessor(task::TimeStamp_t timeStamp) {
 
 bool Processor::scheduleTaskSpecifiedSegment(Task & taskToschedule, Segment * segment,
                                             task::TimeStamp_t currentTime) {
+    if (segment->querySegmentProcessorAffinity() != this->queryProcessorType())
+        return false;
     if (!segment->isSegmentMarkedReady()) return false;
     if (currentSegment == segment) return true;
     if (currentSegment) {
