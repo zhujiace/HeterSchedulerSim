@@ -40,28 +40,36 @@ class SimulationEnv:
     def __del__(self):
         del self.client
 
-    def reset(self):
-        del self.client
-        self.client = SimulatorClient("../../build/main")
+    def reset(self, flash_client = True):
 
-        self.client.create_processor(0, 2)
-        self.client.create_processor(7, 2)
+        if flash_client:
+            del self.client
+            self.client = SimulatorClient("../../build/main")
 
-        tasks = self.task_generator.generate(self.utilization)
-        for task in tasks:
-            self.client.create_heter_ss_task(task[0], 2, (0,7), task[1])
-        
-        self.client.start_simulation()
+            self.client.create_processor(0, 2)
+            self.client.create_processor(7, 2)
+            self.client.set_simulation_timebound(180)
+
+            tasks = self.task_generator.generate(self.utilization)
+            for task in tasks:
+                self.client.create_heter_ss_task(task[0], 2, (0,7), task[1])
+    
+            self.client.start_simulation()
+
+        self.action_space = [-1, 0, 1, 2, 3]
+    
         self.searched_at = -1
         self.to_schedule = [-1, -1]
         self.schedule_space()
         self.find_next_task()
         self.terminated = False
 
-    def action_space(self) -> list:
-        if self.terminated:
-            return []
-        return [-1, 0, 1, 2, 3]
+        self.current_time = self.client.get_current_time_stamp()
+
+        return self.query_state()
+    
+    def reset_client(self) -> bool:
+        return self.client.reset_client()
 
     def schedule_space(self) -> list:
         """search and return list of available schedulings
@@ -82,7 +90,7 @@ class SimulationEnv:
             if proc_state[1] > 1: continue
             for j, task_state in enumerate(self.task_state):
                 if self.self_suspension:
-                    if task_state[2] < 999999: continue
+                    if task_state[2] != -1: continue
                     # already completed, negative index
                     if task_state[1] < 0: continue
                     # not same affinity
@@ -93,7 +101,7 @@ class SimulationEnv:
                         # not the same affinity
                         if segment[0]!=proc_state[0]: continue
                         # already on some processor, useless to schedule on others
-                        if segment[1]<999999: continue
+                        if segment[1]!=-1: continue
                         # segment not ready yet
                         if segment[2]==0: continue
                         # segment is already completed
@@ -118,12 +126,15 @@ class SimulationEnv:
         if not flag:
             self.to_schedule[0] = -1
 
-    def step(self, procId: int) -> 'tuple[tuple, int, bool, dict]':
-        reward = 0
+    def step(self, procId: int) -> 'tuple[tuple, float, bool, dict]':
+        reward = 0.0
+        procId = procId -1
         if (procId >= 0):
             reward = self.schedule(procId, self.to_schedule[0], self.to_schedule[1])
             if reward < 0:
                 return self.query_state(), reward, True, {"valid": False}
+        else:
+            reward = - 0.1
         self.find_next_task()
         while (self.to_schedule[0] == -1):
             # no action
@@ -137,17 +148,17 @@ class SimulationEnv:
 
         return self.query_state(), reward, False, {}
 
-    def schedule(self, procId:int, taskId: int, segId: int) -> int:
+    def schedule(self, procId:int, taskId: int, segId: int) -> float:
         """Perform the schedule command. The avail action is updated.
 
         Returns:
-            reward (int): 0 if schedule a task, -1000 if wrong behavior
+            reward (float): 0 if schedule a task, -1000 if wrong behavior
         """
         if (not (procId, taskId, segId) in self.avail_schedules):
-            return -1000
+            return (-15.0 / (self.current_time+1) - 1 )
         res = self.client.schedule_segment_on_processor(procId, taskId, segId)
         if res.find("Error")!=-1 :
-            return -1000
+            return (-15.0 / (self.current_time+1) - 1 )
 
         new_avail_schedules = []
         for action in self.avail_schedules:
@@ -156,7 +167,22 @@ class SimulationEnv:
             new_avail_schedules.append(action)
         self.avail_schedules = new_avail_schedules
 
-        return 0
+        return 1.0
+
+    def decode_state(self) -> 'tuple':
+        result = [float(self.client.get_current_time_stamp())]
+        for proc_st in self.proc_states:
+            for item in proc_st:
+                result.append(float(item))
+        for task in self.task_state:
+            result.append(float(task[0]));result.append(float(task[1]))
+            result.append(float(task[2]))
+            result.append(float(task[3]))
+            for seg in task[4]:
+                result.append(float(seg[0])); result.append(float(seg[1]))
+        result.append(float(self.to_schedule[0]))
+        result.append(float(self.to_schedule[1]))
+        return tuple(result)
 
     def query_state(self) -> 'tuple':
         self.current_time = self.client.get_current_time_stamp()
@@ -167,31 +193,32 @@ class SimulationEnv:
             else:
                 self.task_state[i] = self.client.query_task_state(i)
         
-        return (self.current_time, self.proc_states, tuple(self.task_state), tuple(self.to_schedule))
+        return self.decode_state()
     
     def query_state_lazy(self) -> 'tuple':
-        return (self.current_time, self.proc_states, tuple(self.task_state), tuple(self.to_schedule))
+        return self.decode_state()
 
     def is_terminated(self) -> bool:
         if self.client.does_task_miss_deadline(): return True
         if self.client.is_simulation_completed(): return True
         return False
 
-    def update_time(self) -> 'tuple[int, bool]':
+    def update_time(self) -> 'tuple[float, bool]':
         """advance the simulator by 1 time
 
         Returns:
-            reward (int):  -5000 if miss ddl, 1000 if complete
+            reward (float):  -5000 if miss ddl, 1000 if complete
             terminate (bool): true if (either miss ddl / complete)
         """
         reward = self.client.update_processor_and_task()
+        reward = 0.0
 
         terminate = False
         if self.client.does_task_miss_deadline():
-            reward -= 5000
+            reward -= 100.0
             terminate = True
         elif self.client.is_simulation_completed():
-            reward += 500
+            reward += 100.0
             terminate = True
 
         return reward, terminate

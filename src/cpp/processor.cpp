@@ -60,3 +60,10 @@ bool Processor::scheduleTaskSpecifiedSegment(Task & taskToschedule, Segment * se
         processorState = BUSY_PREEMPTIVE;
     return true;
 }
+
+bool Processor::resetProcessor(){
+    currentTask = nullptr;
+    currentSegment = nullptr;
+    processorState = IDLE;
+    return true;
+}

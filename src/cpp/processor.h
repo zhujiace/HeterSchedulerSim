@@ -113,6 +113,8 @@ public:
     // Update the processor state if necessary
     bool workProcessor(task::TimeStamp_t timeStamp);
 
+    bool resetProcessor();
+
 };
 
 #endif // processor.h

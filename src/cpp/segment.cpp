@@ -5,9 +5,9 @@ Copy Right. The EHPCL Authors.
 #include "segment.h"
 
 
-bool Segment::resetSegment() {
+bool Segment::resetSegment(bool enforce) {
+    if (!enforce && segmentRemainLength !=0) return false;
     executedAt.clear();
-    if (segmentRemainLength !=0) return false;
     segmentRemainLength = segmentLength;
     currentProcessor = 999999;
     segmentCompleted = false;

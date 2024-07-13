@@ -102,6 +102,7 @@ int Simulator::updateProcessorAndTask() {
     
     taskReleaseCheckedThisRound = false;
     checkTaskRelease();
+    if (taskExecutedTotal == 0 ) return 0;
     return temp;
 }
 
@@ -155,3 +156,13 @@ void Simulator::printSimulatorStates() {
     std::cerr << std::endl;
 }
 
+bool Simulator::resetSimulator() {
+    this->currentTimeStamp = 0;
+    taskMissDeadline = 0;
+    for (Task & task: taskset)
+        if (!task.resetTask(true)) return false;
+    for (Processor & proc: processors)
+        if (!proc.resetProcessor()) return false;
+    return true;
+    this->checkTaskRelease();
+}

@@ -98,6 +98,8 @@ public:
 
     Simulator();
 
+    bool resetSimulator();
+
 };
 
 

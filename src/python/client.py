@@ -193,7 +193,7 @@ class SimulatorClient:
         for i in range(2, len(mapped)//2):
             temp = (mapped[2*i], mapped[2*i+1])
             result.append(temp)
-        return (mapped[0], mapped[1], mapped[2], mapped[3], tuple(result))
+        return (mapped[0],  mapped[1], -1 if mapped[2]>=999999 else mapped[2], mapped[3], tuple(result))
     
     def query_task_execution_states(self) -> 'list[int]':
         result = list(map(int, self.send_command("queryTaskExecutionStates").split()))
@@ -202,6 +202,11 @@ class SimulatorClient:
     @command_decorator("scheduleSegmentOnProcessor {} {} {}")
     def schedule_segment_on_processor(self, procId: int, taskId:int, segId: int) -> str:
         pass
+
+    def reset_client(self) -> bool:
+        result = self.send_command("resetSimulator")
+        if result.find("Error") != -1: return False
+        return True
 
     def print(self):
         return self.send_command("printSimulatorState")

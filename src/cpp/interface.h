@@ -68,6 +68,8 @@ public:
 
     int parseFirstInteger(const std::string & args);
 
+    std::string resetSimulator();
+
 };
 
 #endif // interface.h

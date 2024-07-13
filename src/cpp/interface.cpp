@@ -66,6 +66,8 @@ void Interface::initCommandMap() {
             {return queryTaskExecutionStates();}},
         {"startSimulation", [this](const std::string &)
             {getSimulator().checkTaskRelease(); return "Initial Tasks Released";}},
+        {"resetSimulator", [this](const std::string &)
+            {return resetSimulator();}},
     };
     command_map["createProcessor"] = 
         std::bind(&Interface::createProcessor, this, std::placeholders::_1);
@@ -246,7 +248,7 @@ std::string Interface::scheduleSegmentOnProcessor(const std::string & args) {
 
 std::string Interface::updateProcessorAndTask() {
     int res = simulator.updateProcessorAndTask();
-    if (simulator.doesTaskMissDeadline())
+    if (interactive && simulator.doesTaskMissDeadline())
         std::cerr << "Task miss deadline! Please Exit!\n";
     return std::to_string(res) + " executed. Updated to timestamp " +
            std::to_string(simulator.queryCurrentTimeStamp());
@@ -324,7 +326,7 @@ std::string Interface::querySSTaskStates(const std::string & args) {
     result += std::to_string(simulator.getTask(taskId).queryTaskPeriod());
     result += " ";
     auto * segPtr = simulator.getTask(taskId).getFirstReadySegment();
-    if (!segPtr) result +="-1 999999 0 ";
+    if (!segPtr) result +="-1 -1 0 ";
     else {
         result += std::to_string(segPtr->querySegmentIndex());
         result += " ";
@@ -334,4 +336,9 @@ std::string Interface::querySSTaskStates(const std::string & args) {
         result += " ";
     }
     return result + querySSTaskSegmentStates(args);
+}
+
+std::string Interface::resetSimulator() {
+    bool res = simulator.resetSimulator();
+    return res?"Success":"Reset Error!";
 }

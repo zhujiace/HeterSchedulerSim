@@ -132,9 +132,10 @@ bool Task::executeFirstReadySegment(TimeStamp_t timeStamp) {
 }
 
 
-bool Task::_resetAllSegments() {
+bool Task::resetTask(bool enforce) {
+    executedLength = 0;
     for (Segment & seg : segments)
-       if (!seg.resetSegment()) return false;
+       if (!seg.resetSegment(enforce)) return false;
     return true;
 }
 

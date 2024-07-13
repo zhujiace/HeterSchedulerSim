@@ -181,8 +181,7 @@ public:
     bool executeSegment(SegmentIndex_t segmentIndex, TimeStamp_t timeStamp);
     bool executeFirstReadySegment(TimeStamp_t timeStamp);
 
-    bool _resetAllSegments();
-    bool resetTask() {return _resetAllSegments();};
+    bool resetTask(bool enforce = false);
 
     // Default constructor: create an empty task
     Task() {segments.reserve(10);};
