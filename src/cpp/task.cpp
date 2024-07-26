@@ -171,8 +171,8 @@ std::vector<SegmentIndex_t> & Task::getReadySegments() {
 Segment * Task::getFirstReadySegment() {
     getReadySegments();
     for (SegmentIndex_t & i : readySegments)
-        if (segments[i].queryCurrentProcessorIndex() == 999999)
-            return &(segments[i]);
+        //if (segments[i].queryCurrentProcessorIndex() == 999999)
+        return &(segments[i]);
     return nullptr;
 }
 

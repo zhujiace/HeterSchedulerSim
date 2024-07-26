@@ -330,7 +330,9 @@ std::string Interface::querySSTaskStates(const std::string & args) {
     else {
         result += std::to_string(segPtr->querySegmentIndex());
         result += " ";
-        result += std::to_string(segPtr->queryCurrentProcessorIndex());
+        int tmp = segPtr->queryCurrentProcessorIndex();
+        tmp = (tmp>=99999)?-1:tmp;
+        result += std::to_string(tmp);
         result += " ";
         result += std::to_string(segPtr->querySegmentRemainLength());
         result += " ";
