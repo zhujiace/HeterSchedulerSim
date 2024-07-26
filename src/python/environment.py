@@ -36,6 +36,8 @@ class SimulationEnv:
         self.self_suspension = True
         self.to_schedule = [-1, -1]
 
+        self.invalid_schedule_count = 0
+
     
     def __del__(self):
         del self.client
@@ -55,6 +57,8 @@ class SimulationEnv:
                 self.client.create_heter_ss_task(task[0], 2, (0,7), task[1])
     
             self.client.start_simulation()
+        else:
+            self.reset_client()
 
         self.action_space = [-1, 0, 1, 2, 3]
     
@@ -63,6 +67,10 @@ class SimulationEnv:
         self.schedule_space()
         self.find_next_task()
         self.terminated = False
+        self.survive_score = 0
+        self.schedule_score = 0
+        self.execution_score = 0
+        self.win_score = 0
 
         self.current_time = self.client.get_current_time_stamp()
 
@@ -129,12 +137,14 @@ class SimulationEnv:
     def step(self, procId: int) -> 'tuple[tuple, float, bool, dict]':
         reward = 0.0
         procId = procId -1
+        info = {}
         if (procId >= 0):
             reward = self.schedule(procId, self.to_schedule[0], self.to_schedule[1])
-            if reward < 0:
-                return self.query_state(), reward, True, {"valid": False}
+            if reward <= 0:
+                info = {"valid": False}
         else:
-            reward = - 0.1
+            self.survive_score += 1
+            reward = 1.0
         self.find_next_task()
         while (self.to_schedule[0] == -1):
             # no action
@@ -142,7 +152,7 @@ class SimulationEnv:
             reward = reward + rewardacc
             if terminate:
                 self.terminated = True
-                return self.query_state(), reward, True, {}
+                return self.query_state(), reward, True, {"Survive": self.survive_score, "Schedule": self.schedule_score, "Execution": self.execution_score, "Endtime": self.current_time}
             self.schedule_space()
             self.find_next_task()
 
@@ -155,10 +165,14 @@ class SimulationEnv:
             reward (float): 0 if schedule a task, -1000 if wrong behavior
         """
         if (not (procId, taskId, segId) in self.avail_schedules):
-            return (-15.0 / (self.current_time+1) - 1 )
+            self.invalid_schedule_count += 1
+            return 0.0
+            return (-(10.0+self.invalid_schedule_count) / (self.current_time+1) - 1 )
         res = self.client.schedule_segment_on_processor(procId, taskId, segId)
         if res.find("Error")!=-1 :
-            return (-15.0 / (self.current_time+1) - 1 )
+            self.invalid_schedule_count += 1
+            return 0.0
+            return (-(10.0+self.invalid_schedule_count) / (self.current_time+1) - 1 )
 
         new_avail_schedules = []
         for action in self.avail_schedules:
@@ -166,8 +180,9 @@ class SimulationEnv:
             if (action[1]==taskId and action[2]==segId): continue
             new_avail_schedules.append(action)
         self.avail_schedules = new_avail_schedules
+        self.schedule_score += 1
 
-        return 1.0
+        return 0.9
 
     def decode_state(self) -> 'tuple':
         result = [float(self.client.get_current_time_stamp())]
@@ -210,15 +225,15 @@ class SimulationEnv:
             reward (float):  -5000 if miss ddl, 1000 if complete
             terminate (bool): true if (either miss ddl / complete)
         """
-        reward = self.client.update_processor_and_task()
-        reward = 0.0
+        reward = self.client.update_processor_and_task() * 4.0
+        self.execution_score += reward // 4
 
         terminate = False
         if self.client.does_task_miss_deadline():
-            reward -= 100.0
+            reward = 0.0
             terminate = True
         elif self.client.is_simulation_completed():
-            reward += 100.0
+            reward += 800.0
             terminate = True
 
         return reward, terminate

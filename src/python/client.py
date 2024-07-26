@@ -91,7 +91,8 @@ class SimulatorClient:
         res = self.update_processor_and_task_helper().split()
         executed = int(res[0])
         if executed < 0: 
-            print("Error occured during updating!")
+            # print("Error occured during updating!")
+            executed = 0
         return executed
 
     @command_decorator("sortProcessors")
