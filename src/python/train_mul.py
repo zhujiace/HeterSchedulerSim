@@ -6,14 +6,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import random
+
 import time
 from collections import deque
 import torch.multiprocessing as mp
+from multiprocessing.sharedctypes import Synchronized
+from multiprocessing import Queue
+from torch.optim import Optimizer
+from environment import SimulationEnv
+from dual import DualCPUEnv
 
 # Hyper Parameters for PG Network
 GAMMA = 0.95  # discount factor
-LR = 0.0001  # learning rate
+LR = 0.00005  # learning rate
 
 # Use GPU
 device = torch.device("cuda:0")
@@ -23,13 +28,14 @@ device = torch.device("cuda:0")
 class PGNetwork(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(PGNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 12)
-        self.fc4 = nn.Linear(12, action_dim)
+        self.fc1 = nn.Linear(state_dim, 32)
+        self.fc2 = nn.Linear(32, 16)
+        self.fc4 = nn.Linear(16, action_dim)
 
 
     def forward(self, x):
         out = F.relu(self.fc1(x))
-        # out = F.relu(self.fc2(out))
+        out = F.relu(self.fc2(out))
         # out = F.relu(self.fc3(out))
         out = self.fc4(out)
         return out
@@ -52,10 +58,10 @@ class PGNetwork(nn.Module):
 
 class PG(object):
     # dqn Agent
-    def __init__(self, env, shared_network, optimizer):  # 初始化
-        # 状态空间和动作空间的维度
-        self.state_dim = 89
-        self.action_dim = 5
+    def __init__(self, env: SimulationEnv, shared_network, optimizer):
+
+        self.state_dim = 86
+        self.action_dim = 3
 
         # init N Monte Carlo transitions in one game
         self.ep_obs, self.ep_as, self.ep_rs = [], [], []
@@ -63,8 +69,9 @@ class PG(object):
         # init network parameters
         # self.network = PGNetwork(state_dim=self.state_dim, action_dim=self.action_dim).to(device)
         # self.optimizer = torch.optim.Adam(self.network.parameters(), lr=LR)
-        self.network = shared_network
-        self.optimizer = optimizer
+        self.network: PGNetwork = shared_network
+        self.optimizer: Optimizer = optimizer
+        self.lr = 0.00005
 
         # init some parameters
         self.time_step = 0
@@ -89,14 +96,20 @@ class PG(object):
         self.ep_as.append(a)
         self.ep_rs.append(r)
 
+    def adjust_lr(self):
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = param_group['lr'] / 2.0
+
     def learn(self):
         self.time_step += 1
 
-        # Step 1: 计算每一步的状态价值
+        if (self.time_step %10000 == 0):
+            self.adjust_lr()
+
+        # Step 1: Calulate the step value
         discounted_ep_rs = np.zeros_like(self.ep_rs)
         running_add = 0
-        # 注意这里是从后往前算的，所以式子还不太一样。算出每一步的状态价值
-        # 前面的价值的计算可以利用后面的价值作为中间结果，简化计算；从前往后也可以
+        
         for t in reversed(range(0, len(self.ep_rs))):
             running_add = running_add * GAMMA + self.ep_rs[t]
             discounted_ep_rs[t] = running_add
@@ -107,19 +120,18 @@ class PG(object):
             discounted_ep_rs /= std_dev
         discounted_ep_rs = torch.FloatTensor(discounted_ep_rs).to(device)
 
-        # print(self.ep_obs,self.ep_as,discounted_ep_rs)
-        # Step 2: 前向传播
+        # Step 2: Forward
         softmax_input = self.network.forward(torch.FloatTensor(self.ep_obs).to(device))
         # all_act_prob = F.softmax(softmax_input, dim=0).detach().numpy()
         neg_log_prob = F.cross_entropy(input=softmax_input, target=torch.LongTensor(self.ep_as).to(device), reduction='none')
 
-        # Step 3: 反向传播
+        # Step 3: Backward
         loss = torch.mean(neg_log_prob * discounted_ep_rs)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         
-        # 每次学习完后清空数组
+        # Step 4: Clearup
         self.ep_obs, self.ep_as, self.ep_rs = [], [], []
 
     def save_checkpoint(self, file_path):
@@ -128,9 +140,11 @@ class PG(object):
     def load_checkpoint(self, file_path):
         self.network.load_state_dict(torch.load(file_path))
 
-def worker(worker_id, env_name, shared_network, optimizer, global_ep, global_ep_r, res_queue):
+def worker(worker_id:int, env_seed:int, shared_network: PGNetwork, optimizer: Optimizer,
+           global_ep: Synchronized, global_ep_r: Synchronized, res_queue: Queue):
+
     from environment import SimulationEnv
-    env =  SimulationEnv(env_name)
+    env = DualCPUEnv(env_seed)
     env.reset()
     agent = PG(env, shared_network, optimizer)
     
@@ -154,31 +168,26 @@ def worker(worker_id, env_name, shared_network, optimizer, global_ep, global_ep_
                     else:
                         global_ep_r.value = global_ep_r.value * 0.99 + ep_r * 0.01
                 res_queue.put(global_ep_r.value)
-                if global_ep.value%20000==10000:
+                if global_ep.value%50000==10000:
                     shared_network.save_checkpoint(f"ckpt/checkpoint{int(time.time())}_{global_ep.value}.pth")
                 if global_ep.value%1000==0:
-                    if global_ep.value%10000==0:
-                        LR = LR / 2.0
-                    print(f"{{'Worker': {worker_id}, 'Global Episode': {global_ep.value}, 'Reward': {ep_r}, 'Running Reward': {global_ep_r.value}}}")
+                    _.update({'NetworkTime': agent.time_step , 'Worker': worker_id, 'Global Episode': global_ep.value, 'Reward': ep_r, 'Running Reward': global_ep_r.value})
                     print(_)
                     from sys import stderr
-                    print(f"{{'Worker': {worker_id}, 'Global Episode': {global_ep.value}, 'Reward': {ep_r}, 'Running Reward': {global_ep_r.value}}}", file=stderr)
                     print(_, file=stderr)
                 break
 
 # ---------------------------------------------------------
 # Hyper Parameters
-ENV_NAME = 'CartPole-v0'
-EPISODE = 1000000  # Episode limitation
+EPISODE = 3000000  # Episode limitation
 STEP = 300  # Step limitation in an episode
 TEST = 10  # The number of experiment test every 100 episode
 
 
 def main():
-    env_name = ENV_NAME
-    env = None
-    state_dim = 89
-    action_dim = 5
+
+    state_dim = 86
+    action_dim = 3
 
     global_network = PGNetwork(state_dim, action_dim).to(device)
     global_network.share_memory()
@@ -186,7 +195,8 @@ def main():
 
     global_ep, global_ep_r, res_queue = mp.Value('i', 0), mp.Value('d', 0.), mp.Queue()
 
-    workers = [mp.Process(target=worker, args=(i, 6122, global_network, optimizer, global_ep, global_ep_r, res_queue)) for i in range(8)]
+    workers = [mp.Process(target=worker, args=(i, 6122, global_network, optimizer,
+                                               global_ep, global_ep_r, res_queue)) for i in range(8)]
 
     [w.start() for w in workers]
     [w.join() for w in workers]

@@ -15,7 +15,7 @@ from collections import deque
 
 # Hyper Parameters for PG Network
 GAMMA = 0.95  # discount factor
-LR = 0.01  # learning rate
+LR = 0.0001  # learning rate
 
 # Use GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -138,7 +138,7 @@ class PG(object):
 # ---------------------------------------------------------
 # Hyper Parameters
 ENV_NAME = 'CartPole-v0'
-EPISODE = 30000000  # Episode limitation
+EPISODE = 1000000  # Episode limitation
 STEP = 1000  # Step limitation in an episode
 TEST = 1  # The number of experiment test every 100 episode
 
@@ -148,26 +148,18 @@ import time
 
 def main():
     # initialize OpenAI Gym env and dqn agent
-    env = SimulationEnv(23452)
+    from dual import DualCPUEnv
+    # env = DualCPUEnv(6122, 2.5)
+    env = SimulationEnv(6122)
     env.reset()
 
     agent = PG(env)
-    current_seed = -11
     
     from tqdm import tqdm
     for episode in tqdm(range(EPISODE)):
         # initialize task
 
-        next_seed = 612
-        reset_flag = True
-        if next_seed == current_seed:
-            if env.reset_client():
-                reset_flag = False
-        if reset_flag:
-            env = SimulationEnv(next_seed)
-            current_seed = next_seed
-
-        state = env.reset(reset_flag)
+        state = env.reset(False)
         # Train
         done = False
         while not done:
@@ -182,12 +174,11 @@ def main():
                 break
 
 
-        # Test every 100 episodes
-        if episode % 1000 == 999:
+        if episode % 1000 == 0:
             total_reward = 0
             for i in range(TEST):
                 # testenv = SimulationEnv(int(time.time())*73%13)
-                testenv = SimulationEnv(612)
+                testenv = SimulationEnv(6122)
                 state = testenv.reset()
                 for j in range(STEP):
                     action = agent.choose_action(state)  # direct action for test
@@ -196,9 +187,12 @@ def main():
                     if done:
                         break
             ave_reward = total_reward/TEST
-            print ('episode: ', episode, 'Evaluation Average Reward:', ave_reward)
-            if episode % 20000 == 19999:
-                agent.save_checkpoint(f"ckpt/checkpoint{int(time.time())}_{episode}.pth")
+            _.update({'Global Episode': episode, 'Reward': ave_reward})
+            print (_)
+            import sys
+            print(_, file=sys.stderr)
+            if episode % 20000 == 10000:
+                agent.save_checkpoint(f"ckpt/simenv20{int(time.time())}_{episode}.pth")
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ import numpy as np
 from client import SimulatorClient
 from rand import TaskRandomGenerator
 
-class SimulationEnv:
+class DualCPUEnv:
     """ RL environment for interecting with the scheduling simulation python client.
 
     Main APIs:
@@ -36,7 +36,6 @@ class SimulationEnv:
         self.self_suspension = True
         self.to_schedule = [-1, -1]
 
-        self.invalid_schedule_count = 0
         self.schedule_mask = [1.0, 1.0, 1.0, 1.0, 1.0]
 
     
@@ -50,7 +49,7 @@ class SimulationEnv:
             self.client = SimulatorClient("../../build/main")
 
             self.client.create_processor(0, 2)
-            self.client.create_processor(7, 2)
+            self.client.create_processor(7, 5)
             self.client.set_simulation_timebound(180)
 
             tasks = self.task_generator.generate(self.utilization)
@@ -61,7 +60,7 @@ class SimulationEnv:
         else:
             self.reset_client()
 
-        self.action_space = [-1, 0, 1, 2, 3]
+        self.action_space = [-1, 0, 1]
     
         self.searched_at = -1
         self.to_schedule = [-1, -1]
@@ -72,7 +71,9 @@ class SimulationEnv:
         self.survive_score = 0
         self.schedule_score = 0
         self.execution_score = 0
+
         self.invalid_schedule_count = 0
+
         self.current_time = self.client.get_current_time_stamp()
 
         return self.query_state()
@@ -131,25 +132,32 @@ class SimulationEnv:
             if flag: break
             for action in self.avail_schedules:
                 if action[1] == taskId:
-                    self.to_schedule[0] = action[1]
-                    self.to_schedule[1] = action[2]
-                    flag = True
-                    break
+                    if action[2]%2 == 0:
+                        self.to_schedule[0] = action[1]
+                        self.to_schedule[1] = action[2]
+                        flag = True
+                        break
         if not flag:
             self.to_schedule[0] = -1
 
     def step(self, procId: int) -> 'tuple[tuple, float, bool, dict]':
         reward = 0.0
         procId = procId -1
-        info = {}
         if (procId >= 0):
             reward = self.schedule(procId, self.to_schedule[0], self.to_schedule[1])
+            if reward <= 0:
+                return self.query_state(), reward, True, {"Survive": self.survive_score, "Schedule": self.schedule_score, "Execution": self.execution_score, "Endtime": self.current_time, "Invalid": self.invalid_schedule_count}
         else:
             self.survive_score += 1
             reward = 1.0 / (np.sum(self.schedule_mask)+1)
         self.find_next_task()
         while (self.to_schedule[0] == -1):
-            # no action
+            # no cpu action available
+            # auto schedule on gpu
+            tmp = self.avail_schedules.copy()
+            for action in tmp:
+                if action[2]%2==1:
+                    self.schedule(action[1] + 2, action[1], action[2])
             rewardacc, terminate = self.update_time()
             reward = reward + rewardacc
             if terminate:
@@ -169,8 +177,10 @@ class SimulationEnv:
         if (not (procId, taskId, segId) in self.avail_schedules):
             self.invalid_schedule_count += 1
             return -0.25
-        reward = 1.25 if self.proc_states[procId][1]==0 else 0.75
         res = self.client.schedule_segment_on_processor(procId, taskId, segId)
+
+        reward = 1.25 if self.proc_states[procId][1]==0 else 0.75
+
         if res.find("Error")!=-1 :
             self.invalid_schedule_count += 1
             return -0.25
@@ -187,9 +197,12 @@ class SimulationEnv:
 
     def decode_state(self) -> 'tuple':
         result = [float(self.client.get_current_time_stamp())]
-        for proc_st in self.proc_states:
-            for item in proc_st:
-                result.append(float(item))
+
+        for item in self.proc_states[0]:
+            result.append(float(item))
+        for item in self.proc_states[1]:
+            result.append(float(item))
+        
         for task in self.task_state:
             result.append(float(task[0]));result.append(float(task[1]))
             result.append(float(task[2]))
@@ -235,7 +248,7 @@ class SimulationEnv:
             reward = 0.0
             terminate = True
         elif self.client.is_simulation_completed():
-            reward += 400.0
+            reward += 200.0
             terminate = True
 
         return reward, terminate
