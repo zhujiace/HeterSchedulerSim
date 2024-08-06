@@ -155,7 +155,8 @@ public:
     // TODO: improve task status printing
     friend std::ostream & operator<<(std::ostream & os, const Task & task) {
         os << std::string("Task ") << std::to_string(task.taskIndex);
-        os << std::string(" state: ");
+        os << std::string(", period ") << std::to_string(task.taskPeriod);
+        os << std::string(", state: ");
         switch (task.taskState) {
             case TASKS_EXECUTING:
                 os << std::string("executing");break;
@@ -168,7 +169,7 @@ public:
             default:
                 os << std::string("unknown");break;
         }
-        os << std::string(", Progress: ") << std::to_string(task.executedLength) 
+        os << std::string(", prog: ") << std::to_string(task.executedLength) 
            << std::string("/") << std::to_string(task.querySegmentExecutionTime());
         return os;
     }
