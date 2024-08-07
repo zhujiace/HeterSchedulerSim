@@ -18,6 +18,8 @@ while not done:
     current_time = env.current_time
     # calculate the deadlines
     deadline = [period[i] - current_time%period[i] for i in range(5)]
+    if current_time == 30:
+        print(f"deadline: {deadline}")
     sorted_indices = sorted(range(len(deadline)), key=lambda x: deadline[x])
 
     to_schedule = [True for _ in range(5)]
@@ -32,10 +34,12 @@ while not done:
             continue
         if int(state[18+14*tskIndex])%2==0:
             if len(cpuTaskList) < 2:
-                cpuTaskList.append(tskIndex)
+                if int(state[20+14*tskIndex])>0:
+                    cpuTaskList.append(tskIndex)
         else:
             if len(gpuTaskList) < 2:
-                gpuTaskList.append(tskIndex)
+                if int(state[20+14*tskIndex])>0:
+                    gpuTaskList.append(tskIndex)
 
     cpuStates = [state[2], state[6]]
     gpuStates = [state[10], state[14]]
@@ -65,16 +69,16 @@ while not done:
     print(f"decision: {decisions}")
 
     while int(state[0])==current_time:
-        print(f"make decision! Task {state[-2]}")
-        decision = decisions[int(state[-2])]
+        print(f"make decision! Task {state[-7]}")
+        decision = decisions[int(state[-7])]
         state, _ , done, __ = env.step(decision)
         idle_schedule_count += 1 if decision==0 else 0
         # a = input()
         print(env.client.send_command("printSimulatorState "))
         
-    print(f"idle: {idle_schedule_count}")
+    # print(f"idle: {idle_schedule_count}")
 
-print(idle_schedule_count)
+# print(idle_schedule_count)
 
 # 6, 11 ,9 , 23, 19
 # 30, 36, 45, 60, 180
