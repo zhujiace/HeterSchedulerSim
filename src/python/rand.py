@@ -519,3 +519,145 @@ class TaskRandomGenerator:
         self.task_data[32][17] = np.array([(10, 7), (20, 19), (30, 24), (36, 24), (180, 16)], dtype=self.tasktype)
         self.task_data[32][18] = np.array([(9, 5), (12, 11), (18, 17), (30, 22), (180, 9)], dtype=self.tasktype)
         self.task_data[32][19] = np.array([(12, 11), (18, 14), (20, 14), (30, 21), (180, 18)], dtype=self.tasktype)
+
+class DAGTaskGenerator:
+    """Randomly generate several DAG tasks by uunifast algorithm.
+
+    """
+
+    def __init__(self, seed: int, n: int = 5, uti: float = 3.0, p: float = 0.2,
+                 node_min: int = 10, node_max: int = 30) -> None:
+        """
+        Args:
+        ---
+            seed (int): random seed
+            n (int, optional): number of tasks in the taskset. Defaults to 5.
+            uti (float, optional): total utilization. Defaults to 3.0.
+            p (float, optional): edge probability. Defaults to 0.2.
+        """
+        self.n = n; self.uti = uti; self.edge_prob = p
+        self.U = np.zeros(n, dtype=float)
+
+        self.width = 5 # maximum of nodes in one layer
+        self.node_min = node_min; self.node_max = node_max
+        
+        np.random.seed(seed)
+        self.seed = seed
+        
+        # enum constant, consistent with cpp src
+        CPU = 0; DataCopy = 3; GPU = 7; FPGA = 8; UNKNOWN = 9
+        
+        self.proc_type = 10
+        
+        self.avail_procs = np.zeros(self.proc_type, dtype=bool)
+        self.avail_procs[CPU] = True
+        self.avail_procs[DataCopy] = True
+        self.avail_procs[GPU] = True
+        self.avail_proc_list = [CPU, DataCopy, GPU]
+        
+        self.transition_prob = np.zeros((self.proc_type,self.proc_type), dtype=float)
+        self.transition_prob[CPU][CPU] = 0.3
+        self.transition_prob[CPU][DataCopy] = 0.7
+        self.transition_prob[DataCopy][DataCopy] = 0.3
+        self.transition_prob[DataCopy][CPU] = 0.35
+        self.transition_prob[DataCopy][GPU] = 0.35
+        self.transition_prob[GPU][GPU] = 0.3
+        self.transition_prob[GPU][DataCopy] = 0.7
+        
+        # describe the range of each kind proc
+        self.seg_min = np.ones(self.proc_type, dtype=int)
+        self.seg_max = np.ones(self.proc_type, dtype=int) * 10
+        
+        # self.seg_max[DataCopy] = 20
+    
+    def generate_utilizations(self):
+        """ Generate utilization by UUniFast, stored in self.U
+        """
+        
+        from numpy.random import randint
+        np.random.seed(self.seed+63175)
+        while True:
+            valid = 1
+            for ui in range(self.n):
+                self.U[ui] = float(randint(1, 100))
+            resolution: float = np.sum(self.U) / self.uti
+        
+            for ui in range(self.n):
+                self.U[ui] = self.U[ui] / resolution
+                if self.U[ui] > (self.uti * 0.8):
+                    valid = 0
+            if valid == 1:
+                break
+
+    def generate_dag_task(self, uti=1.0) -> list:
+        """ Generate segments and dependencies for one dag task
+        
+        Returns:
+        ---
+            list:  [total_execution, period,
+                   (s1,t1), (s2,t2), ...
+                   (u1,v1), (u2,v2), ...
+            ]
+        """
+        from numpy.random import randint
+        num_nodes = randint(self.node_min, self.node_max + 1)
+        nodes = np.zeros(num_nodes, dtype=int)
+        types = np.ones(num_nodes, dtype=int) * 9
+        
+        # The first and last node must be CPU
+        nodes[0] = randint(self.seg_min[0], self.seg_max[0]+1)
+        nodes[-1] = randint(self.seg_min[0], self.seg_max[0]+1)
+        types[0] = 0; types[-1] = 0
+   
+        nodes_remain = num_nodes - 2
+        cuts = []
+        
+        while nodes_remain > 0:
+            nodes_current = randint(2, min(self.width, nodes_remain)+1)
+            if nodes_current +1 == nodes_remain: continue
+            cuts.append(nodes_current)
+            nodes_remain = nodes_remain - nodes_current
+        
+        cuts = np.array(cuts); np.random.shuffle(cuts)
+        
+        prec = np.zeros(num_nodes, dtype=bool)
+        index = 1
+        
+        edges = []
+        for g, cut in enumerate(cuts):
+            for i in range(index, index + cut):
+                if prec[i] == False:
+                    prec_node = randint(0, index)
+                    types[i] = np.random.choice(range(self.proc_type), p=self.transition_prob[types[prec_node]])
+                    nodes[i] = randint(self.seg_min[types[0]], self.seg_max[types[0]]+1)
+                    edges.append((prec_node, i))
+                    prec[i] = True
+                if g != len(cuts) - 1:
+                    for j in range(index + cut, index + cut + cuts[g+1]):
+                        if np.random.rand() < self.edge_prob:
+                            edges.append((i, j))
+                            if prec[j] == False:
+                                prec[j] = True
+                                types[j] = np.random.choice(range(self.proc_type), p=self.transition_prob[types[i]])
+                                nodes[j] = randint(self.seg_min[types[i]], self.seg_max[types[i]]+1)
+                else:
+                    edges.append((i, num_nodes-1))
+            index = index + cut
+        
+        result = [num_nodes, int(np.sum(nodes) / uti)]
+        for i in range(num_nodes):
+            result.append((int(nodes[i]), int(types[i])))
+        
+        result += edges
+        return result
+    
+    def generate_tasksets(self):
+        self.generate_utilizations()
+        
+        res = []
+        for uti in self.U:
+            res.append(self.generate_dag_task(uti))
+    
+if __name__ == "__main__":
+    g = DAGTaskGenerator(13, uti=3.5)
+    print(g.generate_dag_task())
