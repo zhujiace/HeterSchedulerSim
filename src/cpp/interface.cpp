@@ -142,6 +142,8 @@ std::string Interface::createDAGTask(const std::string & args) {
     int edgeNum = std::stoi(temp);
 
     Task & task = simulator.createNewTask();
+    task.setTaskPeriod(period);
+    task.setTaskRelativeDeadline(period);
     for (int i = 0; i < nodeNum; i++) {
         int len, type;
         ss >> len >> type;

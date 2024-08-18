@@ -117,7 +117,7 @@ bool Task::executeSegment(SegmentIndex_t segmentIndex, TimeStamp_t timeStamp) {
     if (!res) return false;
     if (segments[segmentIndex].isSegmentCompleted()) {
         for (SegmentIndex_t & segInd: successiveSegments[segmentIndex]) {
-            segments[segInd].markSegmentReady();
+            isSegmentReady(segInd);
         }
         segments[segmentIndex].setCurrentProcessorIndex(999999);
     }
