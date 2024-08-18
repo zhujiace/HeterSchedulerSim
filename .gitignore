@@ -48,3 +48,8 @@ test/main
 # Python Caches
 __pycache__
 *.pyc
+
+# Reinforcement Training
+ckpt/
+*.log
+logs/

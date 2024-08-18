@@ -15,7 +15,7 @@ class SimulatorClient:
 
     def __init__(self, executable_path):
         self.executable = executable_path
-        self.procMap = {0: "CPU", 7: "GPU"}
+        self.procMap = {0: "CPU", 3:"DataCopy", 7: "GPU"}
         self.process = subprocess.Popen(
             [self.executable],
             stdin=subprocess.PIPE,
@@ -140,6 +140,13 @@ class SimulatorClient:
         return self._create_heter_ss_task_helper(period, procCount,
                                                 " ".join([self.procMap[x] for x in proc]) + " ",
                                                 " ".join(map(str, segs))+" ")
+
+    @command_decorator("createDAGTask {}")
+    def _create_dag_task_helper(self, args:str) -> str:
+        pass
+
+    def create_dag_task(self, args: list) -> str:
+        return self._create_dag_task_helper(" ".join(map(str, args)) + " ")
 
     @command_decorator("queryProcessorStates")
     def _query_processor_states_helper(self) -> str:

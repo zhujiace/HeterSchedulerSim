@@ -594,7 +594,7 @@ class DAGTaskGenerator:
         
         Returns:
         ---
-            list:  [total_execution, period,
+            list:  [period, num_nodes, num_edges,
                    (s1,t1), (s2,t2), ...
                    (u1,v1), (u2,v2), ...
             ]
@@ -630,23 +630,23 @@ class DAGTaskGenerator:
                     prec_node = randint(0, index)
                     types[i] = np.random.choice(range(self.proc_type), p=self.transition_prob[types[prec_node]])
                     nodes[i] = randint(self.seg_min[types[0]], self.seg_max[types[0]]+1)
-                    edges.append((prec_node, i))
+                    edges += [prec_node, i]
                     prec[i] = True
                 if g != len(cuts) - 1:
                     for j in range(index + cut, index + cut + cuts[g+1]):
                         if np.random.rand() < self.edge_prob:
-                            edges.append((i, j))
+                            edges += [i,j]
                             if prec[j] == False:
                                 prec[j] = True
                                 types[j] = np.random.choice(range(self.proc_type), p=self.transition_prob[types[i]])
                                 nodes[j] = randint(self.seg_min[types[i]], self.seg_max[types[i]]+1)
                 else:
-                    edges.append((i, num_nodes-1))
+                    edges += [i, num_nodes-1]
             index = index + cut
         
-        result = [num_nodes, int(np.sum(nodes) / uti)]
+        result = [int(np.sum(nodes) / uti), num_nodes, len(edges)//2]
         for i in range(num_nodes):
-            result.append((int(nodes[i]), int(types[i])))
+            result += [int(nodes[i]), int(types[i])]
         
         result += edges
         return result
