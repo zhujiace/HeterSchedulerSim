@@ -77,6 +77,8 @@ void Interface::initCommandMap() {
         std::bind(&Interface::createNewHeterSSTask, this, std::placeholders::_1);
     command_map["setSimulationTimeBound"] =
         std::bind(&Interface::setSimulationTimeBound, this, std::placeholders::_1);
+    command_map["queryTaskSegmentStates"] =
+        std::bind(&Interface::queryTaskSegmentStates, this, std::placeholders::_1);
     command_map["queryTaskState"] = 
         std::bind(&Interface::queryTaskState, this, std::placeholders::_1);
     command_map["scheduleSegmentOnProcessor"] =
@@ -144,6 +146,7 @@ std::string Interface::createDAGTask(const std::string & args) {
     Task & task = simulator.createNewTask();
     task.setTaskPeriod(period);
     task.setTaskRelativeDeadline(period);
+    task.initStorage(nodeNum);
     for (int i = 0; i < nodeNum; i++) {
         int len, type;
         ss >> len >> type;

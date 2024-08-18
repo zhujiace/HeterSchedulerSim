@@ -212,7 +212,7 @@ public:
     Segment * getFirstReadySegment(ProcessorAffinity_t processorAffinity);
     Segment & getSegment(SegmentIndex_t segmentIndex) {return segments[segmentIndex];}
 
-    void initStorage();
+    void initStorage(int buffersize = 10);
 };
 
 class SSTask : public Task {

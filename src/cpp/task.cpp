@@ -185,9 +185,9 @@ Segment * Task::getFirstReadySegment(ProcessorAffinity_t processorAffinity) {
     return nullptr;
 }
 
-void Task::initStorage() {
-    precedingSegments.resize(10);
-    successiveSegments.resize(10);
+void Task::initStorage(int buffersize) {
+    precedingSegments.resize(buffersize);
+    successiveSegments.resize(buffersize);
     for (auto & seg: precedingSegments) seg.clear();
     for (auto & seg: successiveSegments) seg.clear();
 }
