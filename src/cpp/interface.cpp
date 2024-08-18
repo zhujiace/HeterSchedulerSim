@@ -71,6 +71,8 @@ void Interface::initCommandMap() {
     };
     command_map["createProcessor"] = 
         std::bind(&Interface::createProcessor, this, std::placeholders::_1);
+    command_map["createDAGTask"] =
+        std::bind(&Interface::createDAGTask, this, std::placeholders::_1);
     command_map["createHeterSSTask"] =
         std::bind(&Interface::createNewHeterSSTask, this, std::placeholders::_1);
     command_map["setSimulationTimeBound"] =
@@ -106,6 +108,51 @@ std::string Interface::createProcessor(const std::string & args) {
         return "Created successfully";
     
     return "Error Occurred";
+}
+
+std::string Interface::createEmptyTasks(const std::string & args) {
+    int proc_num = parseFirstInteger(args);
+
+    if (proc_num > 0) {
+        for (int i = 0; i < proc_num; i++) 
+            simulator.createNewTask();
+        return "Created successfully";
+    } else {
+        simulator.createNewTask();
+        return "Created successfully";
+    }
+    return "Error Occureed";
+}
+
+/**
+ * @param args format:
+ * <period> <node_num> <edge_num>,
+ * nodes: <node0, type0>, <node1, type1>, ...
+ * edges: <u1, v1>, <u2, v2>, ...
+ * where v_i depends on u_i
+ */
+std::string Interface::createDAGTask(const std::string & args) {
+    std::istringstream ss(args);
+    std::string temp;
+    ss >> temp;
+    int period = std::stoi(temp);
+    ss >> temp;
+    int nodeNum = std::stoi(temp);
+    ss >> temp;
+    int edgeNum = std::stoi(temp);
+
+    Task & task = simulator.createNewTask();
+    for (int i = 0; i < nodeNum; i++) {
+        int len, type;
+        ss >> len >> type;
+        task.createNewSegment(ProcessorAffinity_t(type), len);
+    }
+    for (int i = 0; i < edgeNum; i++) {
+        int u, v;
+        ss >> u >> v;
+        task.setSegmentDependency(u, v);
+    }
+    return "Created successfully";
 }
 
 std::string Interface::createNewHeterSSTask(const std::string & args) {
