@@ -81,6 +81,8 @@ void Interface::initCommandMap() {
         std::bind(&Interface::queryTaskSegmentStates, this, std::placeholders::_1);
     command_map["queryTaskState"] = 
         std::bind(&Interface::queryTaskState, this, std::placeholders::_1);
+    command_map["queryProcessorState"] =
+        std::bind(&Interface::queryProcessorState, this, std::placeholders::_1);
     command_map["scheduleSegmentOnProcessor"] =
         std::bind(&Interface::scheduleSegmentOnProcessor, this, std::placeholders::_1);
     command_map["querySSTaskStates"] =
@@ -231,7 +233,8 @@ std::string Interface::segmentStateHelperFunc(unsigned int taskId, unsigned int 
     std::string result = "";
     result += std::to_string(int(simulator.getTask(taskId).getSegment(segmentId).querySegmentProcessorAffinity()));
     result += " ";
-    result += std::to_string(simulator.getTask(taskId).getSegment(segmentId).queryCurrentProcessorIndex());
+    int tmp = simulator.getTask(taskId).getSegment(segmentId).queryCurrentProcessorIndex();
+    result += std::to_string(tmp>=999999?-1:tmp);
     result += " ";
     result += std::to_string(int(simulator.getTask(taskId).isSegmentReady(segmentId)));
     result += " ";

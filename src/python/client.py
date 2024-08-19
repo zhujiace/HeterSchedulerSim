@@ -148,6 +148,21 @@ class SimulatorClient:
     def create_dag_task(self, args: list) -> str:
         return self._create_dag_task_helper(" ".join(map(str, args)) + " ")
 
+    @command_decorator("queryProcessorStates {}")
+    def _query_processor_state_helper(self, procId: int) -> str:
+        pass
+    
+    def query_processor_state(self, procId: int) -> 'tuple':
+        """query the states of the given processor
+
+        Returns:
+            processorState: procType, processorState, taskIndex, segIndex \\
+            The index of task / segment is only valid when state is busy
+        """
+        res = self._query_processor_state_helper(procId)
+        mapped = tuple(map(int, res.split()))
+        return mapped
+
     @command_decorator("queryProcessorStates")
     def _query_processor_states_helper(self) -> str:
         pass
@@ -156,10 +171,10 @@ class SimulatorClient:
         """query the states of all processors
 
         Returns:
-            tuple: <p1> <p2> <p3> ...
+            tuple: p1, p2, p3, ...
         Notes:
-            processorState: <procType> <processorState> <taskIndex> <segIndex>
-            The index of task / segment is only available when state is busy
+            processorState: procType, processorState, taskIndex, segIndex \\
+            The index of task / segment is only valid when state is busy
         """
         res = self._query_processor_states_helper()
         mapped = list(map(int, res.split()))
@@ -177,9 +192,9 @@ class SimulatorClient:
         """query the task state by index
 
         Returns:
-            tuple: (<period> (<s1>, <s2>, ...))
+            tuple: (period, (s1, s2, ...))
         Notes:
-            segmentState: <affinity> <currentProcessor> <isSegmentReady> <length> <remainLength> 
+            segmentState: affinity, currentProcessor, isSegmentReady, length, remainLength
         """
         res = self._query_task_state_helper(taskId)
         mapped = list(map(int, res.split()))
@@ -193,8 +208,8 @@ class SimulatorClient:
         """query the self-suspension based task state by index
 
         Returns:
-            tuple: (<period> <readySegIndex> <currentProcessor> <remainLength> (<SSSegStates>))\n
-            SSSegStates: <affinity> <segmentLength>
+            tuple: (period, readySegIndex, currentProcessor, remainLength, (SSSegStates))\\
+            SSSegStates: affinity, segmentLength
         """
         mapped = list(map(int, self.send_command(f"querySSTaskStates {taskId}").split()))
         result = []
