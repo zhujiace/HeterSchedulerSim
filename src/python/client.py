@@ -148,7 +148,7 @@ class SimulatorClient:
     def create_dag_task(self, args: list) -> str:
         return self._create_dag_task_helper(" ".join(map(str, args)) + " ")
 
-    @command_decorator("queryProcessorStates {}")
+    @command_decorator("queryProcessorState {}")
     def _query_processor_state_helper(self, procId: int) -> str:
         pass
     
