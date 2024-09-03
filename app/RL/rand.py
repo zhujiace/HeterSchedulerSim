@@ -33,10 +33,15 @@ class TaskRandomGenerator:
         uti_10 = int(utilization * 10)
         task_choice = self.seed%20
 
-        result = []
-        for i in range(self.task_count):
-            period, tot = self.task_data[uti_10][task_choice][i]
-            result.append((period, self.segmentation(tot)))
+        valid = False
+        while not valid:
+            result = []
+            for i in range(self.task_count):
+                period, tot = self.task_data[uti_10][task_choice][i]
+                if tot == period: break
+                result.append((period, self.segmentation(tot)))
+            if len(result) == self.task_count: valid = True
+            task_choice = (task_choice + 1)%20
 
         return result
 

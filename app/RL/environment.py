@@ -3,7 +3,6 @@
 #
 
 import numpy as np
-from client import SimulatorClient
 from rand import TaskRandomGenerator
 
 class SimulationEnv:
@@ -22,6 +21,11 @@ class SimulationEnv:
     """
 
     def __init__(self, seed: int, utilization: float = 2.0) -> None:
+        import sys
+        sim_path = '/home/hamster/HeterSchedulerSim/src/python'
+        if sim_path not in sys.path:
+            sys.path.append(sim_path)
+
         self.seed = seed
         self.client = None
         self.utilization = utilization
@@ -47,6 +51,7 @@ class SimulationEnv:
 
         if flash_client:
             del self.client
+            from client import SimulatorClient
             self.client = SimulatorClient("../../build/main")
 
             self.client.create_processor(0, 2)
