@@ -6,7 +6,7 @@ Copy Right. The EHPCL Authors.
 #define TASK_H
 
 #include <vector>
-#include <forward_list>
+#include <list>
 
 #include "segment.h"
 #include "affinity.h"
@@ -81,13 +81,14 @@ protected:
 
     // Internal storage, the instances of segments
     std::vector<Segment> segments = {};
-    std::vector<std::forward_list<SegmentIndex_t>> precedingSegments = {};
-    std::vector<std::forward_list<SegmentIndex_t>> successiveSegments = {};
+    std::vector<std::list<SegmentIndex_t>> precedingSegments = {};
+    std::vector<std::list<SegmentIndex_t>> successiveSegments = {};
 
     // Internal fixed properties
     SegmentLength_t segmentExecutionTime = 0;
     TaskRTProperty_t taskRealTimeProperty = TaskRTProperty_t::HARDRT;
     TaskIndex_t taskIndex;
+    unsigned int maxParallism = 1;
 
     // Scheduling related properties
     TimeStamp_t taskRelativeDeadline = 0;

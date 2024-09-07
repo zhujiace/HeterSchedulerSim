@@ -47,6 +47,7 @@ Segment & Task::createNewSegment(ProcessorAffinity_t processorAffinity, SegmentL
     else
         this->segments.push_back(Segment(segmentLength, processorAffinity, SegmentPreemption_t::NONPREEMPTIVE));
     segments.back().setSegmentIndex(segments.size()-1);
+    this->segmentExecutionTime += segmentLength;
     return segments.back();
 }
 
@@ -64,6 +65,9 @@ bool Task::initializeTaskByVector(std::vector<ProcessorAffinity_t> & processorTy
         createNewSegment(type, segments[i]);
         if (i!=0) setSegmentDependency(i-1, i);
     }
+    // self-suspension model, parallism = 1
+    maxParallism = 1;
+    segmentExecutionTime = querySegmentExecutionTime();
     return true;
 }
 
@@ -101,6 +105,8 @@ bool Task::releaseTask(TimeStamp_t currentTime) {
 bool Task::checkWhetherMissDDL(TimeStamp_t currentTime) {
     if (taskState == TASKS_FINISHED) return false;
     bool res = (currentTime > taskAbsoluteDeadline);
+    if (res) taskState = TASKS_MISSDDL;
+    res = (currentTime + (segmentExecutionTime - executedLength)/maxParallism > taskAbsoluteDeadline);
     if (res) taskState = TASKS_MISSDDL;
     return res;
 }
@@ -149,6 +155,8 @@ bool Task::isInsideProcessorMasks(processor::ProcessorIndex_t processorGlobalInd
 void Task::setSegmentDependency(SegmentIndex_t segment1, SegmentIndex_t segment2) {
     precedingSegments[segment2].push_front(segment1);
     successiveSegments[segment1].push_front(segment2);
+    if (successiveSegments[segment1].size() > maxParallism)
+        maxParallism = successiveSegments[segment1].size();
 }
 
 bool Task::setTaskScheduled() {
