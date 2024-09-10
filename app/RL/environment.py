@@ -240,7 +240,7 @@ class SimulationEnv:
             reward = 0.0
             terminate = True
         elif self.client.is_simulation_completed():
-            reward += 400.0
+            reward += 10.0
             terminate = True
 
         return reward, terminate
