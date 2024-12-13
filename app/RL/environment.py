@@ -3,7 +3,6 @@
 #
 
 import numpy as np
-from rand import TaskRandomGenerator
 
 class SimulationEnv:
     """ RL environment for interecting with the scheduling simulation python client.
@@ -22,7 +21,9 @@ class SimulationEnv:
 
     def __init__(self, seed: int, utilization: float = 2.0) -> None:
         import sys
-        sim_path = '/home/hamster/HeterSchedulerSim/src/python'
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        sim_path = os.path.join(current_dir, '../../src/python')
         if sim_path not in sys.path:
             sys.path.append(sim_path)
 
@@ -30,6 +31,7 @@ class SimulationEnv:
         self.client = None
         self.utilization = utilization
 
+        from rand import TaskRandomGenerator
         self.task_generator = TaskRandomGenerator(self.seed)
         self.accumulated_reward = 0
 
