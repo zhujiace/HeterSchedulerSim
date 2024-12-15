@@ -40,13 +40,13 @@ args, filename = parse_args("RM Schedule Simulator")
 uti: float = args. u / 10.0
 
 from tqdm import tqdm
-file = open(filename)
+file = open(filename, 'a+')
 file.write(f"scheduling,CPU,DataCopy,GPU,Utilization,Count\n")
 
 count = 0
 
 for run in tqdm(range(args.run), desc=f"c{args.c}e{args.e}g{args.g}u{args.u}"):
-    real_seed = (args.u*402631 + 480881*args.c + 976369*args.e + 236513*args.g ) % 8175383
+    real_seed = (run*324201 + args.u*402631 + 480881*args.c + 976369*args.e + 236513*args.g ) % 8175383
     sche = RateMonotonicScheduler(real_seed, uti=uti,
                                   cpuCount=args.c, datacopy=args.e, gpuCount=args.g)
     success = sche.simulate()
