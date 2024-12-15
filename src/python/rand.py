@@ -33,10 +33,15 @@ class TaskRandomGenerator:
         uti_10 = int(utilization * 10)
         task_choice = self.seed%20
 
-        result = []
-        for i in range(self.task_count):
-            period, tot = self.task_data[uti_10][task_choice][i]
-            result.append((period, self.segmentation(tot)))
+        valid = False
+        while not valid:
+            result = []
+            for i in range(self.task_count):
+                period, tot = self.task_data[uti_10][task_choice][i]
+                if tot == period: break
+                result.append((period, self.segmentation(tot)))
+            if len(result) == self.task_count: valid = True
+            task_choice = (task_choice + 1)%20
 
         return result
 
@@ -526,7 +531,8 @@ class DAGTaskGenerator:
     """
 
     def __init__(self, seed: int, n: int = 5, uti: float = 3.0, p: float = 0.2,
-                 node_min: int = 10, node_max: int = 30) -> None:
+                 node_min: int = 10, node_max: int = 30,
+                 mode: str = 'SIM') -> None:
         """
         Args:
         ---
@@ -548,21 +554,32 @@ class DAGTaskGenerator:
         CPU = 0; DataCopy = 3; GPU = 7; FPGA = 8; UNKNOWN = 9
         
         self.proc_type = 10
-        
         self.avail_procs = np.zeros(self.proc_type, dtype=bool)
-        self.avail_procs[CPU] = True
-        self.avail_procs[DataCopy] = True
-        self.avail_procs[GPU] = True
-        self.avail_proc_list = [CPU, DataCopy, GPU]
+
+        if mode == 'SIM':
+            self.avail_procs[CPU] = True
+            self.avail_procs[DataCopy] = True
+            self.avail_procs[GPU] = True
+            self.avail_proc_list = [CPU, DataCopy, GPU]
         
-        self.transition_prob = np.zeros((self.proc_type,self.proc_type), dtype=float)
-        self.transition_prob[CPU][CPU] = 0.3
-        self.transition_prob[CPU][DataCopy] = 0.7
-        self.transition_prob[DataCopy][DataCopy] = 0.3
-        self.transition_prob[DataCopy][CPU] = 0.35
-        self.transition_prob[DataCopy][GPU] = 0.35
-        self.transition_prob[GPU][GPU] = 0.3
-        self.transition_prob[GPU][DataCopy] = 0.7
+            self.transition_prob = np.zeros((self.proc_type,self.proc_type), dtype=float)
+            self.transition_prob[CPU][CPU] = 0.3
+            self.transition_prob[CPU][DataCopy] = 0.7
+            self.transition_prob[DataCopy][DataCopy] = 0.3
+            self.transition_prob[DataCopy][CPU] = 0.35
+            self.transition_prob[DataCopy][GPU] = 0.35
+            self.transition_prob[GPU][GPU] = 0.3
+            self.transition_prob[GPU][DataCopy] = 0.7
+        else:
+            self.avail_procs[CPU] = True
+            self.avail_procs[GPU] = True
+            self.avail_proc_list = [CPU, GPU]
+        
+            self.transition_prob = np.zeros((self.proc_type,self.proc_type), dtype=float)
+            self.transition_prob[CPU][CPU] = 0.3
+            self.transition_prob[CPU][GPU] = 0.7
+            self.transition_prob[GPU][GPU] = 0.3
+            self.transition_prob[GPU][CPU] = 0.7
         
         # describe the range of each kind proc
         self.seg_min = np.ones(self.proc_type, dtype=int)
@@ -657,6 +674,9 @@ class DAGTaskGenerator:
         res = []
         for uti in self.U:
             res.append(self.generate_dag_task(uti))
+        
+        self.task_sets = res
+        return res
     
 if __name__ == "__main__":
     g = DAGTaskGenerator(13, uti=3.5)
