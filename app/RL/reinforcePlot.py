@@ -9,7 +9,7 @@ data.update(data2)
 df = pd.DataFrame(columns=data.keys())
 
 # 从文件中读取日志数据
-with open('sim-res-uti23.log', 'r', encoding='utf-8') as file:
+with open('./logs/uti23_seed496.log', 'r', encoding='utf-8') as file:
     log_data = file.read()
 
 # 解析日志文件
@@ -27,10 +27,14 @@ for i in range(len(lines)):
     df = pd.concat([df, pd.DataFrame([info])])
 
 df = df.sort_values("Global Episode")
-df = df[(df["Global Episode"]<=3500000)]
+df = df[(df["Global Episode"]<=2700000)]
 
 
 df['Mean Reward'] = df['Reward'].expanding().mean()
+window_size = 100
+df['Moving Average'] = df['Reward'].rolling(window=window_size).mean()
+
+df = df[(df["Global Episode"]>100)]
 
 fig, ax1 = plt.subplots()
 
@@ -39,10 +43,12 @@ ax1.set_ylabel('Reward', color='tab:blue')
 ax1.plot(df["Global Episode"], df["Reward"], color='tab:blue', label='Reward')
 ax1.tick_params(axis='y', labelcolor='tab:blue')
 
+ax1.plot(df["Global Episode"], df["Moving Average"], color='tab:orange', label='Mean')
 
-ax1.plot(df["Global Episode"], df["Mean Reward"], color='tab:orange', label='Mean')
-
+ax1.set_yscale('log')
 
 fig.tight_layout()
 plt.title('Episode vs Reward and Mean')
 plt.show()
+
+
