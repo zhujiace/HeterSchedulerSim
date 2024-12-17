@@ -167,6 +167,8 @@ class Trainer:
             self.agent.load_checkpoint(self.args.c)
         self.logfile = open(f"./logs/uti{self.args.u}_seed{self.args.s}.log", 'a+')
         self.start_ep = self.args.e
+
+        self.record = 11
         
     def parse_args(self):
         from argparse import ArgumentParser
@@ -215,9 +217,11 @@ class Trainer:
                     total_reward += reward
                 _.update({'Global Episode': episode, 'Reward': total_reward})
                 print (_, file=self.logfile)
-                if (total_reward > 700) or (episode % 100000 == 0):
+                if (total_reward > 400) or (episode % 100000 == 0):
                     self.agent.save_checkpoint(f"ckpt/uti{self.args.u}_seed{self.args.s}_{episode}.pth")
-
+                if (_["Endtime"] > self.record):
+                    _["Endtime"] = self.record
+                    self.agent.save_checkpoint(f"ckpt/uti{self.args.u}_seed{self.args.s}_{episode}.pth")
 
 if __name__ == "__main__":
     t = Trainer()
