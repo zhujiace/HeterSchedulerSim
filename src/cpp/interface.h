@@ -38,6 +38,8 @@ public:
 
     ProcessorAffinity_t stringtoProcessorAffinity(const std::string & processorAffinity);
 
+    std::string startSimulation();
+
     std::string createProcessor(const std::string & args);
 
     std::string createDAGTask(const std::string & args);

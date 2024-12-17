@@ -69,6 +69,8 @@ void Interface::initCommandMap() {
         {"resetSimulator", [this](const std::string &)
             {return resetSimulator();}},
     };
+    command_map["startSimulation"] =
+        std::bind(&Interface::startSimulation, this);
     command_map["createProcessor"] = 
         std::bind(&Interface::createProcessor, this, std::placeholders::_1);
     command_map["createDAGTask"] =
@@ -87,6 +89,14 @@ void Interface::initCommandMap() {
         std::bind(&Interface::scheduleSegmentOnProcessor, this, std::placeholders::_1);
     command_map["querySSTaskStates"] =
         std::bind(&Interface::querySSTaskStates, this, std::placeholders::_1);
+}
+
+std::string Interface::startSimulation() {
+    this->getSimulator().checkTaskRelease();
+    int proc_count = getSimulator().queryProcessorCount();
+    for (unsigned int i = 0; i < getSimulator().queryTaskCount(); i++)
+        getSimulator().getTask(i).setMaxParallism(proc_count);
+    return "Initial Tasks Released";
 }
 
 ProcessorAffinity_t Interface::stringtoProcessorAffinity(const std::string & procAff) {

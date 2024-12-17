@@ -213,6 +213,12 @@ public:
     Segment * getFirstReadySegment(ProcessorAffinity_t processorAffinity);
     Segment & getSegment(SegmentIndex_t segmentIndex) {return segments[segmentIndex];}
 
+    bool setMaxParallism(int parallism) {
+        if (parallism> this->maxParallism) this->maxParallism = parallism;
+        else return false;
+        return true;
+    }
+
     void initStorage(int buffersize = 10);
 };
 
