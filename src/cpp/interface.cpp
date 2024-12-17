@@ -293,6 +293,8 @@ std::string Interface::scheduleSegmentOnProcessor(const std::string & args) {
 
     Task & task = simulator.getTask(taskId);
     Segment * segment = &(simulator.getTask(taskId).getSegment(segmentId));
+    if (simulator.getTask(taskId).getSegment(segmentId).queryCurrentProcessorIndex()<999999)
+        return "Schedule Error!";
     TimeStamp_t currentTime = simulator.queryCurrentTimeStamp();
 
     if (simulator.getProcessor(procId).scheduleTaskSpecifiedSegment(task, segment, currentTime)) return "Scheduled";
