@@ -2,7 +2,25 @@
 # Copy Right. The EHPCL Authors.
 #
 
+from dataclasses import dataclass, replace
+from typing import Optional
+
 import numpy as np
+
+
+@dataclass(frozen=True)
+class RewardConfig:
+    invalid_schedule_reward: float = 0
+    valid_schedule_reward: float = 2.0
+    reserve_resource_reward: float = -0.1
+    time_step_penalty: float = 0.0
+    miss_deadline_reward: float = -1000.0
+    simulation_completion_reward: float = 1000.0
+    early_completion_bonus: bool = False
+    early_completion_scale: float = 1.0
+
+
+DEFAULT_REWARD_CONFIG = RewardConfig()
 
 class DAGEnv:
     """ RL environment for interecting with the scheduling simulation python client.
@@ -19,8 +37,11 @@ class DAGEnv:
     will reproduce **exact** same tasksets.
     """
 
-    def __init__(self, seed: int, utilization: float = 2.0, 
-                edf_like: bool = False) -> None:
+    def __init__(self, seed: int, utilization: float = 2.0,
+                phase_reward: bool = False,
+                edf_like: bool = False,
+                processor_config: Optional[dict] = None,
+                task_count: int = 5) -> None:
         import sys
         import os
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -30,25 +51,74 @@ class DAGEnv:
 
         self.seed = seed
         self.client = None
-
-        from rand import DAGTaskGenerator
-        self.task_generator = DAGTaskGenerator(self.seed, uti=utilization, mode='RL')
-        self.task_state = np.zeros(5, dtype=tuple)
         self.proc_type_limit = 10
+        self.processor_names = {
+            0: "CPU",
+            1: "CPUBigCore",
+            2: "CPULittleCore",
+            3: "DataCopy",
+            4: "DataCopyHTD",
+            5: "DataCopyDTH",
+            6: "PE",
+            7: "GPU",
+            8: "FPGA",
+            9: "UNKNOWN",
+        }
+        self.default_processor_config = {0: 2, 7: 2}
+        if processor_config is None:
+            processor_config = self.default_processor_config
+        self.processor_config = self._normalize_processor_config(processor_config)
+        self.enabled_proc_types = [proc_type for proc_type, count in self.processor_config.items() if count > 0]
 
-        # TODO: adjust the following reward
-        self.invalid_schedule_reward = 0.0          # 错误的调度指令
-        self.valid_schedule_reward = 0.0            # 正确的调度指令     
-        self.reserve_resource_reward = 0.0          # 资源保留
-        self.execution_progress_reward_scale = 1.0  # 执行1个unit
-        self.miss_deadline_reward = 0.0             # 死亡
-        self.simulation_completion_reward = 100.0   # 成功
+        from rand import MultiHardwareDAGLimitedGenerator
+        self.task_generator = MultiHardwareDAGLimitedGenerator(
+            self.seed,
+            uti=utilization,
+            n=task_count,
+            hardware_specs=self._build_hardware_specs(),
+        )
 
+        self.reward_config = DEFAULT_REWARD_CONFIG
+        self.execution_progress_reward_scale = 1.0
+
+        self.phase_reward = phase_reward
         self.edf_like = edf_like
         if edf_like:
             print("Enabling EDF Like Reward... To turn off, set the parameter `False`")
 
         self.invalid_schedule_count = 0
+
+    def set_early_completion_bonus(self, enabled: bool) -> None:
+        self.reward_config = replace(self.reward_config, early_completion_bonus=enabled)
+
+    def _normalize_processor_config(self, processor_config: dict) -> dict:
+        normalized = {}
+        for proc_type, count in processor_config.items():
+            proc_type = int(proc_type)
+            count = int(count)
+            if proc_type < 0 or proc_type >= self.proc_type_limit:
+                raise ValueError(f"Invalid processor type id {proc_type}")
+            if count < 0:
+                raise ValueError(f"Processor count must be non-negative, got {count} for type {proc_type}")
+            if count > 0:
+                normalized[proc_type] = count
+        if not normalized:
+            raise ValueError("processor_config must enable at least one processor type")
+        if 0 not in normalized:
+            raise ValueError("processor_config must include CPU(0) because entry/exit nodes are fixed to CPU")
+        return normalized
+
+    def _build_hardware_specs(self) -> list:
+        hardware_specs = []
+        for proc_id in range(self.proc_type_limit):
+            hardware_specs.append({
+                "id": proc_id,
+                "name": self.processor_names.get(proc_id, f"PROC_{proc_id}"),
+                "enabled": proc_id in self.processor_config,
+                "seg_min": 1,
+                "seg_max": 10,
+            })
+        return hardware_specs
 
     def __del__(self):
         del self.client
@@ -60,10 +130,9 @@ class DAGEnv:
             from client import SimulatorClient
             self.client = SimulatorClient("../../build/main")
 
-            self.client.create_processor(0, 2)
-            self.client.create_processor(7, 2)
-            self.client.set_simulation_timebound(200)
-            # self.task_num = len(task_states)
+            for proc_type, proc_count in self.processor_config.items():
+                self.client.create_processor(proc_type, proc_count)
+            # self.client.set_simulation_timebound(200)
             # for i in range(self.task_num):
             #     if task_states[i][0][5] < min_period:
             #         min_period = task_states[i][0][5]
@@ -72,17 +141,25 @@ class DAGEnv:
             self.tasks = self.task_generator.generate_tasksets()
             for task in self.tasks:
                 self.client.create_dag_task(task)
+            self.task_num = len(self.tasks)
+            self.task_state = np.zeros(self.task_num, dtype=tuple)
+            # self.client.set_simulation_timebound(self.tasks[-1][0] + 5)
+            self.time_bound = self.tasks[0][0] * 10 + 5
+            self.client.set_simulation_timebound(self.time_bound)
+            # print(f"Simulation Time Bound: {self.tasks[0][0]*100}")
     
             self.client.start_simulation()
         else:
+            # self.task_state = np.zeros(self.task_num, dtype=tuple)
             self.reset_client()
 
         self.proc_num_count = np.zeros(self.proc_type_limit, dtype=int)
-        self.proc_num_count[0] = 2; self.proc_num_count[7] = 2
-        self.proc_busy = [0, 0, 0, 0]
-        # lock this kind of procs
-        self.proc_locks = np.ones(10, dtype=bool)
-        self.proc_locks[0] = False; self.proc_locks[7] = False
+        for proc_type, proc_count in self.processor_config.items():
+            self.proc_num_count[proc_type] = proc_count
+        self.proc_busy = [0] * int(np.sum(list(self.processor_config.values())))
+        self.proc_locks = np.ones(self.proc_type_limit, dtype=bool)
+        for proc_type in self.enabled_proc_types:
+            self.proc_locks[proc_type] = False
         self.request_index = 0
         self.request_space = []
 
@@ -93,18 +170,13 @@ class DAGEnv:
         self.invalid_schedule_count = 0
         self.current_time = self.client.get_current_time_stamp()
 
+        self.trajectory = []
+
         if self.edf_like:
             # calculate the average segment length of each task
+            # print("Solving segment deadlines...")
             self.query_state()
-            self.segment_ave_len = np.zeros(len(self.task_state), dtype=float)
-            for i in range(len(self.task_state)):
-                tot_len: int = 0
-                for j in range(len(self.task_state[i])):
-                    tot_len += self.task_state[i][j][3]
-                self.segment_ave_len[i] = tot_len / len(self.task_state[i])
-            
             self.query_dependency()
-            print("Solving segment deadlines...")
             from dagedf import DAGEDFConstructur
             constructor = DAGEDFConstructur(self.task_state, self.dependencies, 0)
             self.pre_ddl = constructor.pre_search_ddl()
@@ -115,33 +187,62 @@ class DAGEnv:
 
     def step(self, taskId: int, segId: int) -> 'tuple[tuple, float, bool, dict]':
         # TODO:
+
         reward = 0
 
         if (taskId < 0):
             # the agent give up this round (reserve some resources)
             # lock the resources
             self.proc_locks[self.request_space[self.request_index][0]] = True
-            reward = self.reserve_resource_reward
+            reward = self.reward_config.reserve_resource_reward
         else:
             # attempt to schedule
             reward = self.find_procId_schedule(self.request_space[self.request_index][0],taskId, segId)
 
-        exe_reward = reward
-        if self.edf_like:
-            exe_reward += self.check_edf_like_reward(taskId, segId)
+        if self.edf_like and reward >= 0:
+            reward += self.check_edf_like_reward(taskId, segId)
         terminate = False
+        exe_reward = 0
+        length = 0
         if (not self.find_next_request()):
-            while (self.request_index >= len(self.request_space)):
-                r, terminate = self.update_time()
+            while (self.request_index >= len(self.request_space)) and (not terminate):
+                r, terminate, l = self.update_time()
                 exe_reward += r
-                if terminate: break
-                self.query_request_space()
+                length += l
+                if not terminate:
+                    self.query_request_space()
+            # while exe_reward < self.miss_deadline_reward:
+            #     exe_reward -= self.miss_deadline_reward
 
         exe_reward *= self.execution_progress_reward_scale
-        return self.query_state(seek_request=False), exe_reward, terminate, {}
+        # weight = [1.0, 1.0, 1.0, 0.5, 0.5]
+        # exe_reward *= weight[taskId]
+        self.trajectory.append([self.current_time,(taskId, segId), exe_reward + reward])
 
-    def check_edf_like_reward(self, taskId:int, segId: int) -> float:
-        pass
+        return self.query_state(seek_request=False), exe_reward + reward, terminate, {"release": length}
+
+    def check_edf_like_reward(self, taskId:int, segId: int) -> int:
+        task_states = self.task_state
+        self.queue = []
+        
+        import heapq
+        offset = self.current_time/(task_states[taskId][0][5]) * (task_states[taskId][0][5])
+        for j in range(len(task_states[taskId])):
+            if task_states[taskId][j][2]==0: continue
+            if task_states[taskId][j][4]==0: continue
+            if task_states[taskId][j][0]!=task_states[taskId][segId][0]: continue
+            if task_states[taskId][j][4]!=task_states[taskId][j][3]: continue
+            heapq.heappush(self.queue, (self.pre_ddl[taskId][j] + offset, j))
+        
+        heapq.heappush(self.queue, (self.pre_ddl[taskId][segId] + offset, segId))
+
+        penalty = 0
+        while self.queue!=[]:
+            ddl, seg = heapq.heappop(self.queue)
+            if seg!=segId:
+                penalty -= task_states[taskId][seg][3]
+            else: break
+        return penalty
 
     def find_procId_schedule(self, procAffinity:int, taskId: int, segId: int) -> float:
         """Automaitcally find the <procId> of the given schedule request,
@@ -150,11 +251,11 @@ class DAGEnv:
         
         """
         if (procAffinity!=self.task_state[taskId][segId][0]):
-            return self.invalid_schedule_reward
+            return self.reward_config.invalid_schedule_reward
         for i in range(len(self.proc_states)):
             if (self.proc_states[i][0]==procAffinity) and (self.proc_states[i][1]==0):
                 break
-        if (i >= len(self.proc_states)): return self.invalid_schedule_reward
+        if (i >= len(self.proc_states)): return self.reward_config.invalid_schedule_reward
         return self.schedule(i, taskId, segId)
 
     def schedule(self, procId:int, taskId: int, segId: int) -> float:
@@ -176,10 +277,11 @@ class DAGEnv:
         res = self.client.schedule_segment_on_processor(procId, taskId, segId)
         if res.find("Error")!=-1 :
             self.invalid_schedule_count += 1 
-            return self.invalid_schedule_reward
+            return self.reward_config.invalid_schedule_reward
 
         # TODO: add more reward judge rule here
-        return self.valid_schedule_reward
+        # return self.valid_schedule_reward + self.task_state[taskId][segId][3]
+        return self.reward_config.valid_schedule_reward
 
     def check_proc_states(self) -> list:
         """check the busy states of processors
@@ -212,7 +314,7 @@ class DAGEnv:
             if self.proc_locks[proc[0]]==False:
                 idle_counts[proc[0]] += 1
         self.request_space = []
-        for i in range(self.proc_type_limit):
+        for i in self.enabled_proc_types:
             for j in range(idle_counts[i]):
                 self.request_space.append([i, j, idle_counts[i]])
         self.request_index = 0
@@ -263,7 +365,7 @@ class DAGEnv:
         self.proc_states: list = list(self.client.query_processor_states())
         # the task state has repeat the "period" multiple times to 
         # keep the format same
-        for i in range(5):
+        for i in range(self.task_num):
             tmp = self.client.query_task_state(i)
             result = []
             for j in range(len(tmp[1])):
@@ -299,27 +401,32 @@ class DAGEnv:
             terminate (bool): true if (either miss ddl / complete)
         """
 
+        reward = -self.reward_config.time_step_penalty
         if changenotice:
-            self.prev_proc_state = self.proc_states
-            self.prev_task_state = self.task_state
+            self.prev_proc_state = self.proc_states.copy()
+            self.prev_task_state = self.task_state.copy()
         
-            reward = self.client.update_processor_and_task()
-            self.execution_score += reward
+            self.execution_score += self.client.update_processor_and_task()
             self.query_state(seek_request=False)
 
-            unlock_flag = np.zeros(10, dtype=bool)
+            unlock_flag = np.zeros(self.proc_type_limit, dtype=bool)
             # condition 1, there's more processor of this type
-            considered_procs = [0,7]
+            considered_procs = self.enabled_proc_types
             for i in considered_procs:
-                prev_power = np.sum([(p[1]==0) for p in self.prev_proc_state])
-                cur_power = np.sum([(p[1]==0) for p in self.proc_states])
+                prev_power = np.sum([(p[0] == i) and (p[1] == 0) for p in self.prev_proc_state])
+                cur_power = np.sum([(p[0] == i) and (p[1] == 0) for p in self.proc_states])
                 unlock_flag[i] |= (cur_power > prev_power)
             # condition 2, there's segment relesase (of this proc type)
+            length = 0
             for i in considered_procs:
                 for j in range(len(self.task_state)):
                     for k in range(len(self.task_state[j])):
                         if self.task_state[j][k][0] == i:
-                            if self.task_state[j][k][1] > self.prev_task_state[j][k][1]:
+                            # print(self.task_state[j][k][2], self.prev_task_state[j][k][2])
+                            if self.task_state[j][k][2] > self.prev_task_state[j][k][2]:
+                                length += self.task_state[j][k][3]
+                                # print("error")
+                                # print(f"proc {i} unlock task {j} seg {k} len {self.task_state[j][k][3]}")
                                 unlock_flag[i] = True; break
                     if unlock_flag[i]: break
             # condition 3, there's task release (unlock all)
@@ -328,19 +435,30 @@ class DAGEnv:
                 for j in range(len(self.task_state)):
                     if self.current_time%self.task_state[j][0][5] ==0:
                         unlock_flag[i] = True
+                        length += self.task_state[j][0][3]
             for i in considered_procs:
                 self.proc_locks[i] &= (not unlock_flag[i])
 
+        if self.phase_reward:
+            for i in range(len(self.task_state)):
+                if self.current_time%self.task_state[i][0][5]==0:
+                    for j in range(len(self.task_state[i])):
+                        reward += self.task_state[i][j][3]
+        
+
         terminate = False
         if self.client.does_task_miss_deadline():
-            reward = self.miss_deadline_reward
+            reward += self.reward_config.miss_deadline_reward
             terminate = True
+            self.trajectory = []
         elif self.client.is_simulation_completed():
-            # reward += self.simulation_completion_reward
-            reward += self.current_time
+            reward += self.reward_config.simulation_completion_reward
+            if self.reward_config.early_completion_bonus:
+                reward += max(0.0, self.time_bound - self.current_time) * self.reward_config.early_completion_scale
+            self.terminated = True
             terminate = True
 
-        return reward, terminate
+        return reward, terminate, length
 
     def query_dependency(self) -> 'list':
         self.dependencies = []
@@ -370,7 +488,7 @@ class DAGEnv:
         nodes = []
         state = self.task_state[taskId]
         for i in range(len(state)):
-            name = 'C' if state[i][0]==0 else 'G'
+            name = self.processor_names.get(state[i][0], f"P{state[i][0]}")
             name += f'{i}({state[i][3] - state[i][4]}/{state[i][3]})'
             
             # segment ready -> green; not ready -> red
@@ -383,7 +501,76 @@ class DAGEnv:
         for edge in self.dependencies[taskId]:
             g.add_edge(nodes[edge[0]], nodes[edge[1]])
         print(visualize_dag(g, round_angle=True))
-    
+
+    def visualize_all_tasks(self):
+
+        import networkx as nx
+        from dagviz import visualize_dag
+
+        # 获取所有任务的可视化字符串
+        task_visualizations = []
+        for task_id in range(len(self.task_state)):
+            g = nx.DiGraph()
+            nodes = []
+            state = self.task_state[task_id]
+            for i in range(len(state)):
+                name = self.processor_names.get(state[i][0], f"P{state[i][0]}")
+                name += f'{i}({state[i][3] - state[i][4]}/{state[i][3]})'
+
+                # segment ready -> green; not ready -> red
+                color = "\033[32m" if state[i][2]==1 else "\033[31m"
+                if state[i][1]!=-1: color = "\033[33m"
+                if state[i][4]==0: color = "\033[34m"
+                name = color + name + "\033[0m"
+                nodes.append(name)
+            g.add_nodes_from(nodes)
+            for edge in self.dependencies[task_id]:
+                g.add_edge(nodes[edge[0]], nodes[edge[1]])
+
+            # 获取可视化字符串
+            vis_str = str(visualize_dag(g, round_angle=True))
+            task_visualizations.append(vis_str.split('\n'))
+
+        # 确定每列的最大行数
+        max_lines = max(len(lines) for lines in task_visualizations)
+
+        # 填充所有列表到相同长度
+        for lines in task_visualizations:
+            while len(lines) < max_lines:
+                lines.append('')
+
+        # 设置每行最多显示的任务数
+        tasks_per_row = 2
+        total_tasks = len(task_visualizations)
+
+        # 计算需要多少行
+        num_rows = (total_tasks + tasks_per_row - 1) // tasks_per_row
+
+        # 分多行打印
+        column_width = 60  # 每列的宽度
+
+        for row in range(num_rows):
+            # 计算当前行的任务范围
+            start_idx = row * tasks_per_row
+            end_idx = min((row + 1) * tasks_per_row, total_tasks)
+
+            # 打印当前行的所有任务
+            for i in range(max_lines):
+                line = ""
+                for j in range(start_idx, end_idx):
+                    # 截断或填充每列内容以保持对齐
+                    col_content = task_visualizations[j][i]
+                    if len(col_content) > column_width:
+                        col_content = col_content[:column_width-3] + "..."
+                    else:
+                        col_content = col_content.ljust(column_width)
+                    line += col_content + "  "  # 列之间的间隔
+                print(line)
+
+            # 在行之间添加分隔线（可选）
+            # if row < num_rows - 1:
+            #    print("-" * int((column_width - 5) * tasks_per_row ))
+
     def query_maximum_reward(self, timestamp: int = None) -> int:
         """Infer the maximum reward the agent may or/not achieve.
         Note: The scheduling of RT DAG is a NP-Hard problem, therefore
@@ -403,15 +590,19 @@ class DAGEnv:
             progress += (timestamp//self.task_state[i][0][5])*tot_len
             progress += max(timestamp%self.task_state[i][0][5], tot_len)
         
-        return int(progress*self.execution_progress_reward_scale) + self.simulation_completion_reward
+        return int(progress*self.execution_progress_reward_scale) + timestamp
 
 if __name__ == "__main__":
-    env = DAGEnv(14134,1.3)
+    env = DAGEnv(14134,2.0, True, True)
     env.reset()
-    env.visualize_tasks(1)
     env.step(1,0)
     env.visualize_tasks(1)
-    env.step(1,0)
+    env.step(-1,-1)
+    env.step(-1,-1)
+    env.step(2,0)
+    env.step(-1,-1)
+    _, r, _, _ = env.step(1,2)
+    print(f'reward: {r}')
     env.visualize_tasks(1)
 
     

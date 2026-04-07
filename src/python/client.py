@@ -15,7 +15,18 @@ class SimulatorClient:
 
     def __init__(self, executable_path):
         self.executable = executable_path
-        self.procMap = {0: "CPU", 3:"DataCopy", 7: "GPU"}
+        self.procMap = {
+            0: "CPU",
+            1: "CPUBigCore",
+            2: "CPULittleCore",
+            3: "DataCopy",
+            4: "DataCopyHTD",
+            5: "DataCopyDTH",
+            6: "PE",
+            7: "GPU",
+            8: "FPGA",
+            9: "UNKNOWN",
+        }
         self.process = subprocess.Popen(
             [self.executable],
             stdin=subprocess.PIPE,
@@ -111,7 +122,7 @@ class SimulatorClient:
         """create processors in the simulator
 
         Args:
-            procType (int): 0 -> CPU, 7 -> GPU
+            procType (int): processor affinity id defined in ProcessorAffinity_t
             procNum (int, optional): Defaults to 1.
 
         Returns:

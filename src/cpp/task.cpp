@@ -93,7 +93,7 @@ double Task::querySingleTaskUtilization(ProcessorAffinity_t processorAffinity) {
 
 
 bool Task::releaseTask(TimeStamp_t currentTime) {
-    if (!resetTask()) return false;
+    if (!resetTask(true)) return false;
     
     setFirstSegmentReady();
     taskAbsoluteDeadline = taskPeriod + currentTime;
@@ -140,6 +140,8 @@ bool Task::executeFirstReadySegment(TimeStamp_t timeStamp) {
 
 bool Task::resetTask(bool enforce) {
     executedLength = 0;
+    readySegments.clear();
+    taskState = TaskState_t::TASKS_UNKNOWN;
     for (Segment & seg : segments)
        if (!seg.resetSegment(enforce)) return false;
     return true;

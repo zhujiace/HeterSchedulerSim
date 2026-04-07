@@ -2,6 +2,8 @@
 # Copy Right. The EHPCL Authors.
 #
 
+import os
+
 import numpy as np
 
 class TaskRandomGenerator:
@@ -525,6 +527,9 @@ class TaskRandomGenerator:
         self.task_data[32][18] = np.array([(9, 5), (12, 11), (18, 17), (30, 22), (180, 9)], dtype=self.tasktype)
         self.task_data[32][19] = np.array([(12, 11), (18, 14), (20, 14), (30, 21), (180, 18)], dtype=self.tasktype)
 
+
+from numpy.random import randint
+
 class DAGTaskGenerator:
     """Randomly generate several DAG tasks by uunifast algorithm.
 
@@ -590,8 +595,6 @@ class DAGTaskGenerator:
     def generate_utilizations(self):
         """ Generate utilization by UUniFast, stored in self.U
         """
-        
-        from numpy.random import randint
         np.random.seed(self.seed+63175)
         while True:
             valid = 1
@@ -616,7 +619,6 @@ class DAGTaskGenerator:
                    (u1,v1), (u2,v2), ...
             ]
         """
-        from numpy.random import randint
         num_nodes = randint(self.node_min, self.node_max + 1)
         nodes = np.zeros(num_nodes, dtype=int)
         types = np.ones(num_nodes, dtype=int) * 9
@@ -678,6 +680,900 @@ class DAGTaskGenerator:
         self.task_sets = res
         return res
     
+class DAGLimitedGenerator:
+    """generate DAG tasks with guranteened lcm number (1000-5000).
+
+    """
+        
+    def __init__(self, seed: int, n: int = 5, uti: float = 3.0, p: float = 0.2,
+                 node_min: int = 10, node_max: int = 30,
+                 mode: str = 'SIM') -> None:
+        """
+        Args:
+        ---
+            seed (int): random seed
+            n (int, optional): number of tasks in the taskset. Defaults to 5.
+            uti (float, optional): total utilization. Defaults to 3.0.
+            p (float, optional): edge probability. Defaults to 0.2.
+        """
+
+        self.period_pool = [2520, 3360, 3780, 3960, 4200, 4320, 4620, 
+            4680, 3600, 2880, 4032, 4800, 1680, 2160, 
+            2640, 3024, 3120, 3240, 3696, 4080, 4368, 
+            4536, 4560, 4752, 1260, 1440, 1800, 1980, 2016, 2100]
+
+        self.n = n; self.uti = uti; self.edge_prob = p
+
+        import pickle
+        with open('task_data.pkl', 'rb') as f:
+            self.task_data = pickle.load(f)
+        if n == 10:
+            with open('task_data_10.pkl', 'rb') as f:
+                self.task_data = pickle.load(f)
+        assert (n==5 or n==10), "Currently the generator only support 5 or 10 tasks"
+
+        self.width = 5 # maximum of nodes in one layer
+        self.node_min = node_min; self.node_max = node_max
+        
+        np.random.seed(seed)
+        self.seed = seed
+        
+        # enum constant, consistent with cpp src
+        CPU = 0; DataCopy = 3; GPU = 7; FPGA = 8; UNKNOWN = 9
+        
+        self.proc_type = 10
+        self.avail_procs = np.zeros(self.proc_type, dtype=bool)
+
+        if mode == 'SIM':
+            self.avail_procs[CPU] = True
+            self.avail_procs[DataCopy] = True
+            self.avail_procs[GPU] = True
+            self.avail_proc_list = [CPU, DataCopy, GPU]
+        
+            self.transition_prob = np.zeros((self.proc_type,self.proc_type), dtype=float)
+            self.transition_prob[CPU][CPU] = 0.3
+            self.transition_prob[CPU][DataCopy] = 0.7
+            self.transition_prob[DataCopy][DataCopy] = 0.3
+            self.transition_prob[DataCopy][CPU] = 0.35
+            self.transition_prob[DataCopy][GPU] = 0.35
+            self.transition_prob[GPU][GPU] = 0.3
+            self.transition_prob[GPU][DataCopy] = 0.7
+        else:
+            self.avail_procs[CPU] = True
+            self.avail_procs[GPU] = True
+            self.avail_proc_list = [CPU, GPU]
+        
+            self.transition_prob = np.zeros((self.proc_type,self.proc_type), dtype=float)
+            self.transition_prob[CPU][CPU] = 0.3
+            self.transition_prob[CPU][GPU] = 0.7
+            self.transition_prob[GPU][GPU] = 0.3
+            self.transition_prob[GPU][CPU] = 0.7
+        
+        # describe the range of each kind proc
+        self.seg_min = 1
+        self.seg_max = 10 # segment最长长度
+        
+        self.generated = False
+        # self.seg_max[DataCopy] = 20
+
+
+    def generate_node(self) -> int:
+        """ generate one segment according to 
+            self.remain_exe = execution
+            self.remain_node = num_nodes
+        """
+        if self.remain_node ==1:
+            self.remain_node = 0
+            res = self.remain_exe
+            self.remain_exe = 0
+            return res
+
+        real_seg_min = max(self.seg_min, self.remain_exe - 10*self.remain_node + 10)
+        real_seg_max = min(self.seg_max, self.remain_exe - self.remain_node * 1)
+
+        try:
+            res = randint(real_seg_min, real_seg_max+1)
+        except:
+            print(self.remain_exe, self.remain_node)
+            res = 1
+
+        self.remain_exe -= res
+        self.remain_node -= 1
+        return res 
+
+    def generate_dag_task(self, period:int, execution: int) -> list:
+        """ Generate segments and dependencies for one dag task
+        
+        Returns:
+        ---
+            list:  [period, num_nodes, num_edges,
+                   (s1,t1), (s2,t2), ...
+                   (u1,v1), (u2,v2), ...
+            ]
+        """
+        from math import ceil, floor
+        real_node_min = max(self.node_min, ceil(execution / self.seg_max))
+        real_node_max = min(self.node_max, floor(execution / self.seg_min))
+
+        num_nodes = randint(real_node_min, real_node_max + 1)
+        nodes = np.zeros(num_nodes, dtype=int)
+        types = np.ones(num_nodes, dtype=int) * 9
+        
+        self.remain_exe = execution
+        self.remain_node = num_nodes
+
+        # The first and last node must be CPU
+        nodes[0] = self.generate_node()
+        nodes[-1] = self.generate_node()
+        types[0] = 0; types[-1] = 0
+   
+        nodes_remain = num_nodes - 2
+        cuts = []
+        
+        while nodes_remain > 0:
+            nodes_current = randint(2, min(self.width, nodes_remain)+1)
+            if nodes_current +1 == nodes_remain: continue
+            cuts.append(nodes_current)
+            nodes_remain = nodes_remain - nodes_current
+        
+        cuts = np.array(cuts); np.random.shuffle(cuts)
+        
+        prec = np.zeros(num_nodes, dtype=bool)
+        index = 1
+        
+        edges = []
+        for g, cut in enumerate(cuts):
+            for i in range(index, index + cut):
+                if prec[i] == False:
+                    prec_node = randint(0, index)
+                    types[i] = np.random.choice(range(self.proc_type), p=self.transition_prob[types[prec_node]])
+                    nodes[i] = self.generate_node()
+                    edges += [prec_node, i]
+                    prec[i] = True
+                if g != len(cuts) - 1:
+                    for j in range(index + cut, index + cut + cuts[g+1]):
+                        if np.random.rand() < self.edge_prob:
+                            edges += [i,j]
+                            if prec[j] == False:
+                                prec[j] = True
+                                types[j] = np.random.choice(range(self.proc_type), p=self.transition_prob[types[i]])
+                                nodes[j] = self.generate_node()
+                else:
+                    edges += [i, num_nodes-1]
+            index = index + cut
+        
+        result = [period, num_nodes, len(edges)//2]
+        for i in range(num_nodes):
+            result += [int(nodes[i]), int(types[i])]
+        
+        result += edges
+        return result
+    
+    def generate_tasksets(self):
+        
+        if self.generated:
+            return self.task_sets
+
+        res = []
+        np.random.seed(self.seed)
+        for i in range(self.n):
+            res.append(self.generate_dag_task(self.task_data[int(self.uti*10)][self.seed%120][i][0], 
+                                              self.task_data[int(self.uti*10)][self.seed%120][i][1]))
+
+        self.task_sets = res
+        self.generated = True
+        return res
+
+
+class MultiHardwareDAGLimitedGenerator:
+    """Generate DAG task sets with configurable hardware types and transitions."""
+
+    DEFAULT_HARDWARE_SPECS = [
+        {"id": 0, "name": "CPU", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 1, "name": "CPUBigCore", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 2, "name": "CPULittleCore", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 3, "name": "DataCopy", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 4, "name": "DataCopyHTD", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 5, "name": "DataCopyDTH", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 6, "name": "PE", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 7, "name": "GPU", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 8, "name": "FPGA", "enabled": True, "seg_min": 1, "seg_max": 10},
+        {"id": 9, "name": "UNKNOWN", "enabled": False, "seg_min": 1, "seg_max": 10},
+    ]
+    DEFAULT_TRANSITION_MATRIX = np.array([
+        [0.05, 0.05, 0.05, 0.20, 0.10, 0.10, 0.15, 0.15, 0.15, 0.00],  # CPU
+        [0.20, 0.25, 0.15, 0.15, 0.10, 0.00, 0.05, 0.05, 0.05, 0.00],  # CPUBigCore
+        [0.20, 0.15, 0.25, 0.15, 0.10, 0.00, 0.05, 0.05, 0.05, 0.00],  # CPULittleCore
+        [0.20, 0.10, 0.10, 0.00, 0.00, 0.00, 0.20, 0.20, 0.20, 0.00],  # DataCopy
+        [0.05, 0.05, 0.05, 0.10, 0.10, 0.00, 0.10, 0.35, 0.20, 0.00],  # DataCopyHTD
+        [0.20, 0.10, 0.10, 0.15, 0.00, 0.15, 0.10, 0.10, 0.10, 0.00],  # DataCopyDTH
+        [0.10, 0.05, 0.05, 0.10, 0.05, 0.15, 0.25, 0.15, 0.10, 0.00],  # PE
+        [0.10, 0.05, 0.05, 0.15, 0.00, 0.20, 0.10, 0.25, 0.10, 0.00],  # GPU
+        [0.10, 0.05, 0.05, 0.15, 0.00, 0.20, 0.10, 0.10, 0.25, 0.00],  # FPGA
+        [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 1.00],  # UNKNOWN
+    ], dtype=float)
+
+    def __init__(self, seed: int, n: int = 5, uti: float = 3.0, p: float = 0.2,
+                 node_min: int = 10, node_max: int = 30, hardware_specs=None,
+                 transition_matrix=None) -> None:
+        self.n = n
+        self.uti = uti
+        self.edge_prob = p
+        self.width = 5
+        self.node_min = node_min
+        self.node_max = node_max
+        self.seed = seed
+        self.generated = False
+
+        np.random.seed(seed)
+
+        self.cpu_type = 0
+        self.unknown_type = 9
+        self.proc_type = 10
+
+        if hardware_specs is None:
+            hardware_specs = self.DEFAULT_HARDWARE_SPECS
+        self.hardware_specs = self._normalize_hardware_specs(hardware_specs)
+
+        self.avail_procs = np.zeros(self.proc_type, dtype=bool)
+        self.avail_proc_list = []
+        self.seg_min_by_type = np.ones(self.proc_type, dtype=int)
+        self.seg_max_by_type = np.ones(self.proc_type, dtype=int) * 10
+        for spec in self.hardware_specs:
+            proc_id = spec["id"]
+            self.avail_procs[proc_id] = spec["enabled"]
+            self.seg_min_by_type[proc_id] = spec["seg_min"]
+            self.seg_max_by_type[proc_id] = spec["seg_max"]
+            if spec["enabled"]:
+                self.avail_proc_list.append(proc_id)
+
+        if not self.avail_procs[self.cpu_type]:
+            raise ValueError("CPU must be enabled because entry/exit nodes are fixed to CPU")
+        if not self.avail_proc_list:
+            raise ValueError("At least one hardware type must be enabled")
+
+        self.seg_min = int(np.min(self.seg_min_by_type[self.avail_procs]))
+        self.seg_max = int(np.max(self.seg_max_by_type[self.avail_procs]))
+        self.transition_prob = self._build_transition_matrix(transition_matrix)
+
+        task_data_name = "task_data.pkl" if self.n == 5 else "task_data_10.pkl"
+        if n not in (5, 10):
+            raise AssertionError("Currently the generator only support 5 or 10 tasks")
+        task_data_path = os.path.join(os.path.dirname(__file__), task_data_name)
+        import pickle
+        with open(task_data_path, "rb") as f:
+            self.task_data = pickle.load(f)
+
+    def _normalize_hardware_specs(self, hardware_specs):
+        normalized = []
+        for spec in hardware_specs:
+            item = dict(spec)
+            item.setdefault("enabled", True)
+            item.setdefault("seg_min", 1)
+            item.setdefault("seg_max", 10)
+            item.setdefault("transitions", {})
+            proc_id = item["id"]
+            if proc_id < 0 or proc_id >= self.proc_type:
+                raise ValueError(f"Invalid hardware id {proc_id}, expected 0 <= id < {self.proc_type}")
+            normalized.append(item)
+        return normalized
+
+    def _build_transition_matrix(self, transition_matrix):
+        if transition_matrix is not None:
+            matrix = np.asarray(transition_matrix, dtype=float)
+            if matrix.shape != (self.proc_type, self.proc_type):
+                raise ValueError(
+                    f"transition_matrix must have shape {(self.proc_type, self.proc_type)}"
+                )
+            return self._normalize_transition_matrix(matrix)
+
+        matrix = np.array(self.DEFAULT_TRANSITION_MATRIX, dtype=float, copy=True)
+        for spec in self.hardware_specs:
+            src = spec["id"]
+            if not spec["enabled"] or src == self.unknown_type:
+                continue
+
+            transitions = spec.get("transitions", {})
+            if transitions:
+                matrix[src] = 0.0
+                for dst, weight in transitions.items():
+                    if 0 <= dst < self.proc_type and weight > 0:
+                        matrix[src][dst] = float(weight)
+
+        return self._normalize_transition_matrix(matrix)
+
+    def _normalize_transition_matrix(self, matrix):
+        normalized = np.array(matrix, dtype=float, copy=True)
+        enabled_mask = np.array(self.avail_procs, dtype=bool)
+        normalized[~enabled_mask, :] = 0.0
+        normalized[:, ~enabled_mask] = 0.0
+
+        for proc_id in range(self.proc_type):
+            if not enabled_mask[proc_id]:
+                continue
+
+            enabled_row = normalized[proc_id]
+            row_sum = enabled_row.sum()
+            if row_sum <= 0:
+                enabled_targets = [dst for dst in self.avail_proc_list if dst != self.unknown_type]
+                if not enabled_targets:
+                    enabled_targets = [self.cpu_type]
+                enabled_row[enabled_targets] = 1.0
+                if proc_id in enabled_targets:
+                    enabled_row[proc_id] += 1.0
+                row_sum = enabled_row.sum()
+            normalized[proc_id] = enabled_row / row_sum
+        return normalized
+
+    def sample_node_type(self, parent_type: int) -> int:
+        probs = self.transition_prob[parent_type]
+        candidates = np.flatnonzero(probs > 0)
+        if len(candidates) == 0:
+            return self.cpu_type
+        return int(np.random.choice(candidates, p=probs[candidates] / probs[candidates].sum()))
+
+    def generate_node(self) -> int:
+        if self.remain_node == 1:
+            self.remain_node = 0
+            res = self.remain_exe
+            self.remain_exe = 0
+            return res
+
+        real_seg_min = max(self.seg_min, self.remain_exe - self.seg_max * self.remain_node + self.seg_max)
+        real_seg_max = min(self.seg_max, self.remain_exe - self.remain_node * self.seg_min)
+
+        try:
+            res = randint(real_seg_min, real_seg_max + 1)
+        except Exception:
+            print(self.remain_exe, self.remain_node)
+            res = self.seg_min
+
+        self.remain_exe -= res
+        self.remain_node -= 1
+        return res
+
+    def _sample_segment_length(self, proc_type: int) -> int:
+        # Keep total execution exactly matched while respecting global node constraints.
+        return self.generate_node()
+
+    def generate_dag_task(self, period: int, execution: int) -> list:
+        from math import ceil, floor
+
+        real_node_min = max(self.node_min, ceil(execution / self.seg_max))
+        real_node_max = min(self.node_max, floor(execution / self.seg_min))
+
+        num_nodes = randint(real_node_min, real_node_max + 1)
+        nodes = np.zeros(num_nodes, dtype=int)
+        types = np.ones(num_nodes, dtype=int) * self.unknown_type
+
+        self.remain_exe = execution
+        self.remain_node = num_nodes
+
+        nodes[0] = self._sample_segment_length(self.cpu_type)
+        nodes[-1] = self._sample_segment_length(self.cpu_type)
+        types[0] = self.cpu_type
+        types[-1] = self.cpu_type
+
+        nodes_remain = num_nodes - 2
+        cuts = []
+        while nodes_remain > 0:
+            nodes_current = randint(2, min(self.width, nodes_remain) + 1)
+            if nodes_current + 1 == nodes_remain:
+                continue
+            cuts.append(nodes_current)
+            nodes_remain = nodes_remain - nodes_current
+
+        cuts = np.array(cuts)
+        np.random.shuffle(cuts)
+
+        prec = np.zeros(num_nodes, dtype=bool)
+        index = 1
+        edges = []
+        for g, cut in enumerate(cuts):
+            for i in range(index, index + cut):
+                if prec[i] == False:
+                    prec_node = randint(0, index)
+                    types[i] = self.sample_node_type(types[prec_node])
+                    nodes[i] = self._sample_segment_length(types[i])
+                    edges += [prec_node, i]
+                    prec[i] = True
+                if g != len(cuts) - 1:
+                    for j in range(index + cut, index + cut + cuts[g + 1]):
+                        if np.random.rand() < self.edge_prob:
+                            edges += [i, j]
+                            if prec[j] == False:
+                                prec[j] = True
+                                types[j] = self.sample_node_type(types[i])
+                                nodes[j] = self._sample_segment_length(types[j])
+                else:
+                    edges += [i, num_nodes - 1]
+            index = index + cut
+
+        result = [period, num_nodes, len(edges) // 2]
+        for i in range(num_nodes):
+            result += [int(nodes[i]), int(types[i])]
+        result += edges
+        return result
+
+    def generate_tasksets(self):
+        if self.generated:
+            return self.task_sets
+
+        res = []
+        np.random.seed(self.seed)
+        uti_idx = int(self.uti * 10)
+        seed_idx = self.seed % 120
+        for i in range(self.n):
+            period = self.task_data[uti_idx][seed_idx][i][0]
+            execution = self.task_data[uti_idx][seed_idx][i][1]
+            res.append(self.generate_dag_task(period, execution))
+
+        self.task_sets = res
+        self.generated = True
+        return res
+
+
+class DAGViTGenerator:
+    """Randomly generate several DAG ViT tasks by uunifast algorithm.
+
+    """
+
+    def __init__(self, seed: int, n: int = 5, uti: float = 3.0) -> None:
+        """
+        Args:
+        ---
+            seed (int): random seed
+            n (int, optional): number of tasks in the taskset. Defaults to 5.
+            uti (float, optional): total utilization. Defaults to 3.0.
+            p (float, optional): edge probability. Defaults to 0.2.
+        """
+        self.n = n; self.uti = uti
+        self.U = np.zeros(n, dtype=float)
+
+ 
+        np.random.seed(seed)
+        self.seed = seed
+        
+        # enum constant, consistent with cpp src
+        CPU = 0; DataCopy = 3; GPU = 7; FPGA = 8; UNKNOWN = 9
+        
+        self.proc_type = 10
+        self.avail_procs = np.zeros(self.proc_type, dtype=bool)
+
+
+        self.avail_procs[CPU] = True
+        self.avail_procs[GPU] = True
+        self.avail_proc_list = [CPU, GPU]
+        
+    
+        
+        # self.seg_max[DataCopy] = 20
+    
+    def generate_utilizations(self):
+        """ Generate utilization by UUniFast, stored in self.U
+        """
+        np.random.seed(self.seed+19742)
+        while True:
+            valid = 1
+            for ui in range(self.n):
+                self.U[ui] = float(randint(1, 100))
+            resolution: float = np.sum(self.U) / self.uti
+        
+            for ui in range(self.n):
+                self.U[ui] = self.U[ui] / resolution
+                if self.U[ui] >= 0.9:
+                    valid = 0
+            if valid == 1:
+                break
+    
+    def generate_tasksets(self):
+        self.generate_utilizations()
+        
+        """
+            list:  [period, num_nodes, num_edges,
+                   (s1,t1), (s2,t2), ...
+                   (u1,v1), (u2,v2), ...
+            ]
+        """
+
+        res = []
+        dependency = [ 0,1, 1,2, 2,3, 2,4, 2,5, 3,6, 4,6, 5,7, 6,7,
+                       7,8, 8,9, 9,10, 10,11, 11,12]
+        num_nodes = 13; num_edges = len(dependency)
+        tasks = np.zeros((5,13), dtype=list)
+        tasks[0] = np.array([6,2,1,1,1,1,1,3,1,1,4,1,2]) #25
+        tasks[1] = np.array([19,5,2,1,1,1,4,8,3,2,9,1,2]) #58
+        tasks[2] = np.array([56,8,4,2,2,1,12,17,4,3,11,3,3]) #126
+        tasks[3] = np.array([119,29,3,3,3,3,15,30,4,9,12,8,4]) #242
+        tasks[4] = np.array([147,88,4,9,9,9,30,59,4,30,23,29,6]) #447
+        types = [0,7,0,7,7,7,7,7,0,7,0,7,0]
+
+        for i in range(5):
+            tmp = [int(np.sum(tasks[i]) / self.U[i]), num_nodes, num_edges]
+            for j in range(num_nodes):
+                tmp += [int(tasks[i][j]), types[j]]
+            tmp += dependency
+            res.append(tmp)
+        
+        self.task_sets = res
+        return res
+
+class DAGViTLammaGenerator:
+    """Randomly generate several DAG ViT tasks by uunifast algorithm.
+
+    """
+
+    def __init__(self, seed: int, n: int = 5, uti: float = 3.0) -> None:
+        """
+        Args:
+        ---
+            seed (int): random seed
+            n (int, optional): number of tasks in the taskset. Defaults to 5.
+            uti (float, optional): total utilization. Defaults to 3.0.
+            p (float, optional): edge probability. Defaults to 0.2.
+        """
+        self.n = n; self.uti = uti
+        self.U = np.zeros(n, dtype=float)
+
+ 
+        np.random.seed(seed)
+        self.seed = seed
+        
+        # enum constant, consistent with cpp src
+        CPU = 0; DataCopy = 3; GPU = 7; FPGA = 8; UNKNOWN = 9
+        
+        self.proc_type = 10
+        self.avail_procs = np.zeros(self.proc_type, dtype=bool)
+
+
+        self.avail_procs[CPU] = True
+        self.avail_procs[GPU] = True
+        self.avail_proc_list = [CPU, GPU]
+        
+    
+        
+        # self.seg_max[DataCopy] = 20
+    
+    def generate_utilizations(self):
+        """ Generate utilization by UUniFast, stored in self.U
+        """
+        np.random.seed(self.seed+19742)
+        while True:
+            valid = 1
+            for ui in range(self.n):
+                self.U[ui] = float(randint(1, 100))
+            resolution: float = np.sum(self.U) / self.uti
+        
+            for ui in range(self.n):
+                self.U[ui] = self.U[ui] / resolution
+                if self.U[ui] >= 0.9:
+                    valid = 0
+            if valid == 1:
+                break
+    
+    def generate_tasksets(self):
+        self.generate_utilizations()
+        
+        """
+            list:  [period, num_nodes, num_edges,
+                   (s1,t1), (s2,t2), ...
+                   (u1,v1), (u2,v2), ...
+            ]
+        """
+
+        res = []
+
+        vit_dep = [0,1, 1,2, 
+                   2,3,  2,4, 2,5,
+                   3,6, 4,6, 6,7,
+                   7,8, 5,8,
+                   8,9, 9,10, 10,11, 11,12, 12,13, 13,14, 14,15]
+        llama_dep = [0,1, 1,2, 2,3, 3,4]
+        vit_node_num = 16
+        llama_node_num = 5
+        vit_edge_num = len(vit_dep) // 2
+        llama_edge_num = len(llama_dep) // 2
+
+        tasks = [0,0,0,0,0]
+
+        tasks[0] = np.array([7,1,23,1,1,1,8,1,271,19,1,20,1,19,1,5])
+        tasks[2] = np.array([7,1,23,1,1,1,8,1,271,19,1,20,1,19,1,5])
+        tasks[4] = np.array([7,1,23,1,1,1,8,1,271,19,1,20,1,19,1,5])
+        tasks[1] = np.array([7,3,18,1,14])
+        tasks[3] = np.array([7,3,18,1,14])
+
+        vit_types = [0,7,0,7,7,7,7,7,7,0,7,0,7,0,7,0]
+        llama_types = [0,7,0,7,0]
+
+
+        for i in range(5):
+            num_nodes = vit_node_num if i%2==0 else llama_node_num
+            num_edges = vit_edge_num if i%2==0 else llama_edge_num
+            tmp = [int(np.sum(tasks[i]) / self.U[i]), num_nodes, num_edges]
+            for j in range(num_nodes):
+                tmp += [int(tasks[i][j]), vit_types[j] if i%2==0 else llama_types[j]]
+            tmp += vit_dep if i%2==0 else llama_dep
+            res.append(tmp)
+        
+        self.task_sets = res
+        return res
+
+
+from workloads import WORKLOADS, get_always_on_workload, get_event_workload
+from workloads_abstraction import abstract_event_workloads
+
+class DAGWorkloadBuilder:
+    """Build DAG task sets from predefined representative workloads."""
+
+    def __init__(
+        self,
+        workload_names=None,
+        event_names=None,
+        event_abstraction_mode=None,
+        reservation_period=None,
+        percentile_q: float = 0.95,
+        peak_cfg=None,
+        split_event_by_resource: bool = True,
+    ) -> None:
+        CPU = 0
+        GPU = 7
+
+        self.proc_type = 10
+        self.avail_procs = np.zeros(self.proc_type, dtype=bool)
+        self.avail_procs[CPU] = True
+        self.avail_procs[GPU] = True
+        self.avail_proc_list = [CPU, GPU]
+
+        if workload_names is None:
+            self.workload_names = list(WORKLOADS["always_on"].keys())
+        else:
+            self.workload_names = workload_names
+
+        self.event_names = [] if event_names is None else list(event_names)
+        self.event_abstraction_mode = event_abstraction_mode
+        self.reservation_period = reservation_period
+        self.percentile_q = percentile_q
+        self.peak_cfg = peak_cfg
+        self.split_event_by_resource = split_event_by_resource
+
+        self.surrogate_workloads = []
+
+    def validate_workload(self, name: str, workload: dict) -> None:
+        required_keys = ["period", "wcets", "types", "dependency"]
+        for key in required_keys:
+            if key not in workload:
+                raise ValueError(f"Workload {name} missing key: {key}")
+
+        wcets = workload["wcets"]
+        types = workload["types"]
+        dependency = workload["dependency"]
+
+        if len(wcets) != len(types):
+            raise ValueError(f"Workload {name}: len(wcets) != len(types)")
+
+        if len(dependency) % 2 != 0:
+            raise ValueError(f"Workload {name}: dependency must be flattened node pairs")
+
+    def workload_to_flattened_task(self, workload: dict) -> list:
+        name = workload.get("name", "unknown")
+        self.validate_workload(name, workload)
+
+        period = int(workload["period"])
+        wcets = list(workload["wcets"])
+        types = list(workload["types"])
+        dependency = [int(x) for x in workload["dependency"]]
+
+        num_nodes = len(wcets)
+        num_edges = len(dependency) // 2
+
+        task = [period, num_nodes, num_edges]
+        for wcet, proc_type in zip(wcets, types):
+            task.extend([int(wcet), int(proc_type)])
+        task.extend(dependency)
+
+        return task
+
+    def generate_tasksets(
+        self,
+        always_on_names=None,
+        event_names=None,
+        event_abstraction_mode=None,
+        reservation_period=None,
+        percentile_q=None,
+        peak_cfg=None,
+        split_event_by_resource=None,
+        return_surrogates: bool = False,
+    ):
+        res = []
+        surrogates = []
+
+        always_on_names = self.workload_names if always_on_names is None else list(always_on_names)
+        event_names = self.event_names if event_names is None else list(event_names)
+        event_abstraction_mode = (
+            self.event_abstraction_mode if event_abstraction_mode is None else event_abstraction_mode
+        )
+        reservation_period = self.reservation_period if reservation_period is None else reservation_period
+        percentile_q = self.percentile_q if percentile_q is None else percentile_q
+        peak_cfg = self.peak_cfg if peak_cfg is None else peak_cfg
+        if split_event_by_resource is None:
+            split_event_by_resource = self.split_event_by_resource
+
+        for name in always_on_names:
+            workload = get_always_on_workload(name)
+            res.append(self.workload_to_flattened_task(workload))
+
+        if event_names:
+            if event_abstraction_mode is None:
+                raise ValueError("event_abstraction_mode must be provided when event_names is not empty")
+            if reservation_period is None:
+                raise ValueError("reservation_period must be provided when event_names is not empty")
+
+            real_event_workloads = [get_event_workload(name) for name in event_names]
+            surrogates = abstract_event_workloads(
+                event_workloads=real_event_workloads,
+                reservation_period=reservation_period,
+                mode=event_abstraction_mode,
+                percentile_q=percentile_q,
+                peak_cfg=peak_cfg,
+                split_by_resource=split_event_by_resource,
+            )
+
+            for workload in surrogates:
+                res.append(self.workload_to_flattened_task(workload))
+
+        self.task_sets = res
+        self.surrogate_workloads = surrogates
+
+        if return_surrogates:
+            return res, surrogates
+        return res
+
+
+def _test_multi_hardware_dag_limited_generator():
+    hardware_specs = [
+        {
+            "id": 0,
+            "name": "CPU",
+            "enabled": True,
+            "transitions": {0: 0.3, 3: 0.4, 7: 0.3},
+        },
+        {
+            "id": 3,
+            "name": "DataCopy",
+            "enabled": True,
+            "transitions": {3: 0.3, 4: 0.35, 5: 0.35},
+        },
+        {
+            "id": 4,
+            "name": "DataCopyHTD",
+            "enabled": True,
+            "transitions": {7: 0.8, 8: 0.2},
+        },
+        {
+            "id": 5,
+            "name": "DataCopyDTH",
+            "enabled": True,
+            "transitions": {0: 0.8, 1: 0.2},
+        },
+        {
+            "id": 7,
+            "name": "GPU",
+            "enabled": True,
+            "transitions": {7: 0.4, 5: 0.4, 6: 0.2},
+        },
+        {
+            "id": 8,
+            "name": "FPGA",
+            "enabled": False,
+        },
+        {
+            "id": 1,
+            "name": "CPUBigCore",
+            "enabled": True,
+            "transitions": {1: 0.5, 0: 0.5},
+        },
+        {
+            "id": 6,
+            "name": "PE",
+            "enabled": True,
+            "transitions": {6: 0.5, 5: 0.5},
+        },
+        {
+            "id": 2,
+            "name": "CPULittleCore",
+            "enabled": False,
+        },
+        {
+            "id": 9,
+            "name": "UNKNOWN",
+            "enabled": False,
+        },
+    ]
+
+    generator = MultiHardwareDAGLimitedGenerator(
+        seed=14134,
+        n=5,
+        uti=3.0,
+        hardware_specs=hardware_specs,
+    )
+    tasksets = generator.generate_tasksets()
+
+    enabled_ids = [spec["id"] for spec in generator.hardware_specs if spec["enabled"]]
+    id_to_name = {spec["id"]: spec["name"] for spec in generator.hardware_specs}
+
+    print("=== MultiHardwareDAGLimitedGenerator Test ===")
+    print(f"enabled hardware ids: {enabled_ids}")
+    print("transition rows:")
+    for proc_id in enabled_ids:
+        row = generator.transition_prob[proc_id]
+        row_summary = {
+            id_to_name[idx]: round(float(prob), 3)
+            for idx, prob in enumerate(row)
+            if prob > 0
+        }
+        print(f"  {id_to_name[proc_id]}({proc_id}): {row_summary}")
+
+    print("\ngenerated task summaries:")
+    for task_idx, task in enumerate(tasksets):
+        period, num_nodes, num_edges = task[:3]
+        node_info = task[3:3 + 2 * num_nodes]
+        edge_info = task[3 + 2 * num_nodes:]
+
+        wcets = node_info[0::2]
+        proc_types = node_info[1::2]
+        unique_types, counts = np.unique(proc_types, return_counts=True)
+        type_summary = {
+            id_to_name[int(proc_id)]: int(count)
+            for proc_id, count in zip(unique_types, counts)
+        }
+
+        print(
+            f"  task {task_idx}: period={period}, nodes={num_nodes}, "
+            f"edges={num_edges}, execution={sum(wcets)}, type_dist={type_summary}"
+        )
+        print(f"    entry_type={proc_types[0]}, exit_type={proc_types[-1]}, edge_pairs={len(edge_info) // 2}")
+
+        if proc_types[0] != generator.cpu_type or proc_types[-1] != generator.cpu_type:
+            print("    [WARN] entry/exit node is not CPU")
+        if len(edge_info) != num_edges * 2:
+            print("    [WARN] edge count mismatch")
+        if any(proc_id not in enabled_ids for proc_id in proc_types):
+            print("    [WARN] found disabled hardware type in generated task")
+
+    print("\nfirst task raw data:")
+    print(tasksets[0])
+
+
 if __name__ == "__main__":
-    g = DAGTaskGenerator(13, uti=3.5)
-    print(g.generate_dag_task())
+    # g = DAGTaskGenerator(13, uti=3.5)
+    # g = DAGViTGenerator(134, uti=2.4)
+    # g = DAGViTLammaGenerator(14134, uti=0.4)
+    # print(g.generate_tasksets())
+
+    # _test_multi_hardware_dag_limited_generator()
+
+    from rand import DAGWorkloadBuilder
+
+    builder = DAGWorkloadBuilder(
+        workload_names=["vit_small"],
+        event_names=["obstacle_alert_gpu", "sign_detect_cpu_gpu"],
+        event_abstraction_mode="mean",
+        reservation_period=20,
+    )
+
+    taskset, surrogates = builder.generate_tasksets(return_surrogates=True)
+    print("Generated taskset:")
+    for task in taskset:
+        print(task)
+    print("\nSurrogate workloads:")
+    for workload in surrogates: 
+        print(workload)
+
+
+    builder = MultiHardwareDAGLimitedGenerator(
+        14134,
+        uti = 2.0,
+        n = 5,
+    )
+    tasks = builder.generate_tasksets()
+    print(tasks)
