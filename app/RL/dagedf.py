@@ -323,7 +323,7 @@ if __name__ == "__main__":
     #     write_to_csv(results, filename)
     #     results = []
 
-    sche = DAGEDFScheduler(seed=14134, uti= 5.4, smart=0, verbose=False, processor_config={0: 2, 7: 2, 8: 2}, task_count=10)
+    sche = DAGEDFScheduler(seed=14134, uti= 2.7, smart=0, verbose=False, processor_config={0: 2, 7: 2, 8: 1}, task_count=10)
     print(sche.schedule())
     # sche.export('./Schedule_list/ViTLlama/edf_14134_0.4_.pkl')
 

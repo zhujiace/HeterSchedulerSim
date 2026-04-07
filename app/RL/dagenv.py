@@ -10,12 +10,22 @@ import numpy as np
 
 @dataclass(frozen=True)
 class RewardConfig:
+    # Action-level reward: immediate feedback for scheduling or reserving.
     invalid_schedule_reward: float = 0
     valid_schedule_reward: float = 2.0
-    reserve_resource_reward: float = -0.1
-    time_step_penalty: float = 0.0
-    miss_deadline_reward: float = -1000.0
-    simulation_completion_reward: float = 1000.0
+    forced_noop_reward: float = 0.0
+    avoidable_noop_penalty: float = -0.1
+
+    # Time-step shaping reward: encourages progress and utilization at each timestamp.
+    time_step_penalty: float = 0
+    utilization_reward_scale: float = 1.0
+    on_time_job_completion_reward: float = 0.0
+
+    # Episode-level terminal reward: encourages successful completion over failure.
+    miss_deadline_reward: float = 0
+    simulation_completion_reward: float = 1000
+
+    # Optional completion-quality reward: rewards finishing earlier than the time bound.
     early_completion_bonus: bool = False
     early_completion_scale: float = 1.0
 
@@ -90,6 +100,56 @@ class DAGEnv:
 
     def set_early_completion_bonus(self, enabled: bool) -> None:
         self.reward_config = replace(self.reward_config, early_completion_bonus=enabled)
+
+    def _get_processor_utilization(self) -> float:
+        if not self.proc_states:
+            return 0.0
+        busy_count = sum(proc_state[1] != 0 for proc_state in self.proc_states)
+        return busy_count / len(self.proc_states)
+
+    def _task_completed(self, task_id: int) -> bool:
+        return all(segment[4] == 0 for segment in self.task_state[task_id])
+
+    def _has_schedulable_segment_for_current_request(self) -> bool:
+        if self.request_index >= len(self.request_space):
+            return False
+
+        request_affinity = self.request_space[self.request_index][0]
+        for task_state in self.task_state:
+            for segment in task_state:
+                if segment[0] != request_affinity:
+                    continue
+                if segment[1] != -1:
+                    continue
+                if segment[2] == 0:
+                    continue
+                if segment[4] == 0:
+                    continue
+                return True
+        return False
+
+    def _init_job_tracking(self) -> None:
+        self.task_periods = np.array([task[0] for task in self.tasks], dtype=int)
+        self.job_deadlines = self.task_periods.copy()
+        self.job_rewarded = np.zeros(self.task_num, dtype=bool)
+
+    def _collect_job_completion_reward(self) -> float:
+        reward = 0.0
+        if self.reward_config.on_time_job_completion_reward == 0:
+            return reward
+
+        for task_id in range(self.task_num):
+            if (not self.job_rewarded[task_id]) and self._task_completed(task_id) and self.current_time <= self.job_deadlines[task_id]:
+                reward += self.reward_config.on_time_job_completion_reward
+                self.job_rewarded[task_id] = True
+        return reward
+
+    def _update_job_release_tracking(self) -> None:
+        for task_id in range(self.task_num):
+            period = self.task_periods[task_id]
+            if period > 0 and self.current_time > 0 and self.current_time % period == 0:
+                self.job_deadlines[task_id] = self.current_time + period
+                self.job_rewarded[task_id] = False
 
     def _normalize_processor_config(self, processor_config: dict) -> dict:
         normalized = {}
@@ -171,6 +231,7 @@ class DAGEnv:
         self.current_time = self.client.get_current_time_stamp()
 
         self.trajectory = []
+        self._init_job_tracking()
 
         if self.edf_like:
             # calculate the average segment length of each task
@@ -194,7 +255,10 @@ class DAGEnv:
             # the agent give up this round (reserve some resources)
             # lock the resources
             self.proc_locks[self.request_space[self.request_index][0]] = True
-            reward = self.reward_config.reserve_resource_reward
+            if self._has_schedulable_segment_for_current_request():
+                reward = self.reward_config.avoidable_noop_penalty
+            else:
+                reward = self.reward_config.forced_noop_reward
         else:
             # attempt to schedule
             reward = self.find_procId_schedule(self.request_space[self.request_index][0],taskId, segId)
@@ -438,6 +502,12 @@ class DAGEnv:
                         length += self.task_state[j][0][3]
             for i in considered_procs:
                 self.proc_locks[i] &= (not unlock_flag[i])
+
+        if self.reward_config.utilization_reward_scale != 0:
+            reward += self.reward_config.utilization_reward_scale * self._get_processor_utilization()
+
+        reward += self._collect_job_completion_reward()
+        self._update_job_release_tracking()
 
         if self.phase_reward:
             for i in range(len(self.task_state)):

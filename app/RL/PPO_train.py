@@ -109,11 +109,12 @@ def train_on_policy_agent(env:DAGEnv, agent:PPOSchedulerAgent, num_episodes, dev
                 return_list.append(episode_return)
                 # trajectory_list.append(env.trajectory)
                 # print(transition_dict['rewards'])
-                actor_loss, critic_loss = agent.update(transition_dict)
+                actor_loss, critic_loss, policy_entropy = agent.update(transition_dict)
                 if writer is not None:
                     writer.add_scalar('train/return', episode_return, global_step=num_episodes / 10 * i + i_episode + 1)
                     writer.add_scalar('train/actor_loss', np.mean(actor_loss), global_step=num_episodes / 10 * i + i_episode + 1)
                     writer.add_scalar('train/critic_loss', np.mean(critic_loss), global_step=num_episodes / 10 * i + i_episode + 1)
+                    writer.add_scalar('train/policy_entropy', np.mean(policy_entropy), global_step=num_episodes / 10 * i + i_episode + 1)
                     writer.add_scalar('train/timestamp', next_timestamp, global_step=num_episodes / 10 * i + i_episode + 1)
 
                 if (i_episode + 1) % 10 == 0:
@@ -136,7 +137,7 @@ def main():
 
     parser.add_argument("--entropy_coef", type=float, default=0, help="policy entropy")
     parser.add_argument("--mode", type=str, default="default", help="")
-    parser.add_argument("--processor_config", type=str, default="0:2,7:2,8:2",
+    parser.add_argument("--processor_config", type=str, default="0:2,7:2,8:1",
                         help="processor config in the format type:count,type:count")
     parser.add_argument("--task_count", type=int, default=5)
     parser.add_argument("--early_completion_bonus", action="store_true")
@@ -177,7 +178,7 @@ def main():
         is_sampling=False
         )
     actor_lr = 3e-4
-    critic_lr = 1e-3
+    critic_lr = 3e-4
     num_episodes = args.episodes
     gamma = 0.98 # gamma越大越关注长期奖励
     lmbda = 0.95 # lambda=0则不累计 lambda=1完全蒙特卡洛

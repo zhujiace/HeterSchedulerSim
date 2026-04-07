@@ -31,7 +31,7 @@ class PPOSchedulerAgent:
 
     def update(self, transition_dict):
         if not transition_dict['graphs']:
-            return [], []
+            return [], [], []
 
         graphs = Batch.from_data_list(transition_dict['graphs']).to(self.device)
         next_graphs = Batch.from_data_list(transition_dict['next_graphs']).to(self.device)
@@ -51,6 +51,7 @@ class PPOSchedulerAgent:
 
         actor_loss_list = []
         critic_loss_list = []
+        entropy_list = []
         for _ in range(self.epochs):
             probs = self.actor(graphs)
             values = self.critic(graphs)
@@ -67,9 +68,10 @@ class PPOSchedulerAgent:
             
             actor_loss_list.append(actor_loss.item())
             critic_loss_list.append(critic_loss.item())
+            entropy_list.append(entropy.mean().item())
             self.actor_optimizer.zero_grad(set_to_none=True)
             self.critic_optimizer.zero_grad(set_to_none=True)
             total_loss.backward()
             self.actor_optimizer.step()
             self.critic_optimizer.step()
-        return actor_loss_list, critic_loss_list
+        return actor_loss_list, critic_loss_list, entropy_list
