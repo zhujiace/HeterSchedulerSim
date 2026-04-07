@@ -19,7 +19,7 @@ class RewardConfig:
     # Time-step shaping reward: encourages progress and utilization at each timestamp.
     time_step_penalty: float = 0
     utilization_reward_scale: float = 0.0
-    on_time_job_completion_reward: float = 5.0
+    on_time_job_completion_reward: float = 0.0
 
     # Episode-level terminal reward: encourages successful completion over failure.
     miss_deadline_reward: float = 0
